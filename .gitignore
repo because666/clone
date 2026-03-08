@@ -5,7 +5,7 @@ dist/
 *.csv
 **/*.csv
 data/raw/
-data/processed/trajectories/
-frontend/public/data/processed/trajectories/
+data/processed/trajectories/*
+frontend/public/data/processed/trajectories/*
 !frontend/public/data/processed/trajectories/shenzhen_uav_trajectories.json
 __pycache__/
