@@ -1,0 +1,10 @@
+# IDE
+.vscode/
+node_modules/
+dist/
+*.csv
+**/*.csv
+data/raw/
+data/processed/trajectories/
+frontend/public/data/processed/trajectories/
+__pycache__/
