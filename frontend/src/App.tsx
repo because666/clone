@@ -7,8 +7,8 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-900">
-      <MapContainer onRightPanelToggle={setIsRightPanelOpen} />
       <DashboardOverlay hideRightPanels={isRightPanelOpen} />
+      <MapContainer onRightPanelToggle={setIsRightPanelOpen} />
     </div>
   );
 }

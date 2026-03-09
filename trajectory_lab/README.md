@@ -10,7 +10,7 @@ trajectory_lab/
 │   ├── geo_utils.py      # 地理工具（haversine、插值）
 │   ├── no_fly_zones.py   # 禁飞区数据结构与格网索引
 │   ├── poi_loader.py     # POI 加载 + 净化（过滤被禁飞区覆盖的 demand）
-│   └── planner.py        # 轨迹规划接口（当前：直线占位）
+│   └── planner.py        # 轨迹规划接口（当前：安全且高速的 A* v4，带错落高度）
 ├── batch_generate.py     # 批量随机生成
 ├── single_generate.py    # 指定两点生成单条
 └── server.py             # Flask REST API
@@ -25,7 +25,7 @@ pip install flask flask-cors
 
 ### 2. 批量生成轨迹（直接写入前端）
 ```bash
-python trajectory_lab/batch_generate.py --city shenzhen --n 50
+python trajectory_lab/batch_generate.py --city shenzhen --n 2000 #对于深圳市，这个数字应该是2000，可以保证在每个时刻都有500条轨迹
 ```
 
 ### 3. 指定两点生成单条轨迹
@@ -80,7 +80,8 @@ frontend/public/data/processed/trajectories/{city}_uav_trajectories.json
 
 | 版本 | 文件 | 状态 |
 |-----|------|------|
-| v0 直线占位 | `core/planner.py` | ✅ 当前 |
+| v0 直线占位 | `core/planner.py` | 历史版本 |
+| v4 A*规避+错落高度 | `core/planner.py` | ✅ 当前 |
 | 后续迭代 | `core/planner.py` | 待开发 |
 
 ## 前端调试面板 API

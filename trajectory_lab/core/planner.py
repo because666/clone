@@ -38,16 +38,23 @@ class TrajectoryResult:
 def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
-def _altitude_profile(n: int, dist_m: float) -> list[float]:
+def _altitude_profile(n: int, dist_m: float, flight_id: str = "") -> list[float]:
     takeoff_n = max(1, int(n * TAKEOFF_RATIO))
     landing_n = max(1, int(n * LANDING_RATIO))
     cruise_n  = max(0, n - takeoff_n - landing_n)
+    
+    target_alt = CRUISE_ALT_M
+    if flight_id:
+        import hashlib
+        hash_val = int(hashlib.md5(flight_id.encode('utf-8')).hexdigest(), 16)
+        target_alt = 80.0 + (hash_val % 41)
+        
     alts = []
     for i in range(takeoff_n):
-        alts.append(_lerp(0, CRUISE_ALT_M, ((i+1)/takeoff_n) ** 0.7))
-    alts.extend([CRUISE_ALT_M] * cruise_n)
+        alts.append(_lerp(0, target_alt, ((i+1)/takeoff_n) ** 0.7))
+    alts.extend([target_alt] * cruise_n)
     for i in range(landing_n):
-        alts.append(_lerp(CRUISE_ALT_M, 0, ((i+1)/landing_n) ** 1.4))
+        alts.append(_lerp(target_alt, 0, ((i+1)/landing_n) ** 1.4))
     while len(alts) < n:
         alts.append(0.0)
     return alts[:n]
@@ -218,7 +225,7 @@ def plan(
     raw_points.append((b_lat, b_lon))
     
     n = len(raw_points)
-    alts = _altitude_profile(n, actual_dist_m)
+    alts = _altitude_profile(n, actual_dist_m, flight_id)
     duration_s = actual_dist_m / CRUISE_SPEED_MS
     timestamps_raw = [i * duration_s / max(n - 1, 1) for i in range(n)]
     step_idx = max(1, int(SAMPLE_RATE_S * CRUISE_SPEED_MS / SAMPLE_STEP_M))
