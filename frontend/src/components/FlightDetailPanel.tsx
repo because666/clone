@@ -37,7 +37,8 @@ export default function FlightDetailPanel({
                     const bat = ed.battery[idx];
                     const pwr = ed.power[idx];
                     const startBat = ed.battery[0];
-                    const minBat = Math.min(...ed.battery);
+                    const validBattery = ed.battery.filter((b: number) => b > 0);
+                    const minBat = validBattery.length > 0 ? Math.min(...validBattery) : 0;
 
                     return (
                         <div className="flex flex-col gap-3.5 text-sm">
