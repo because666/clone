@@ -1,19 +1,8 @@
 """
 server.py — 飞行轨迹算法 Flask API 服务
 
-监听 http://localhost:5001
-前端 Vite 将 /api/* 请求代理到此地址。
-
-接口:
-  GET  /api/pois?city=shenzhen         返回净化后的 demand POI 列表（用于前端点选）
-  POST /api/batch                       批量生成轨迹  body: {city, n, min_dist, max_dist, seed}
-  POST /api/single                      单条生成       body: {city, from_lat, from_lon, from_id, to_lat, to_lon, to_id, append}
-  GET  /api/status                      服务健康检查
-
 启动:
-  python trajectory_lab/server.py
-  或
-  python trajectory_lab/server.py --port 5001
+  python trajectory_lab/scripts/server.py
 """
 import sys
 import json
@@ -23,7 +12,7 @@ import time
 import argparse
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
@@ -33,10 +22,10 @@ except ImportError:
     print("缺少依赖，请运行: pip install flask flask-cors")
     sys.exit(1)
 
-from trajectory_lab.core.poi_loader import load_city_pois, report_blocked
+from trajectory_lab.core.poi_loader import load_city_pois
 from trajectory_lab.core.planner import plan
 from trajectory_lab.core.geo_utils import haversine_m
-from trajectory_lab.batch_generate import build_output
+from trajectory_lab.scripts.batch_generate import build_output
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,7 +98,6 @@ def get_pois():
 
 # ═══════════════════════════════════════════════════════════════════════
 # POST /api/batch
-# body: {"city":"shenzhen","n":50,"min_dist":400,"max_dist":8000,"seed":42}
 # ═══════════════════════════════════════════════════════════════════════
 @app.route("/api/batch", methods=["POST"])
 def batch_generate():
@@ -178,8 +166,6 @@ def batch_generate():
 
 # ═══════════════════════════════════════════════════════════════════════
 # POST /api/single
-# body: {"city":"shenzhen","from_lat":22.53,"from_lon":113.93,"from_id":"xxx",
-#         "to_lat":22.55,"to_lon":113.95,"to_id":"yyy","append":false}
 # ═══════════════════════════════════════════════════════════════════════
 @app.route("/api/single", methods=["POST"])
 def single_generate():
