@@ -10,12 +10,15 @@ import AlgoLabPanel from './AlgoLabPanel';
 import { INITIAL_VIEW_STATE, CITY_COORDS } from '../constants/map';
 import { useCityData } from '../hooks/useCityData';
 import { useUAVAnimation } from '../hooks/useUAVAnimation';
+import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useAlerts } from './AlertNotificationProvider';
 import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
+import WeatherOverlay from './WeatherOverlay';
 import { uavModelBuffer } from '../utils/animation';
 
-export default function MapContainer({ onRightPanelToggle }: { onRightPanelToggle?: (open: boolean) => void } = {}) {
+export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = false }: { onRightPanelToggle?: (open: boolean) => void, isRightPanelOpen?: boolean } = {}) {
     // 1. 数据按需加载和缓存
     const {
         buildingsData,
@@ -43,7 +46,11 @@ export default function MapContainer({ onRightPanelToggle }: { onRightPanelToggl
     const mapRef = useRef<MapRef>(null);
     const deckRef = useRef<any>(null);
 
-    // 3. 动画引擎生命周期管理
+    // 风速和告警
+    const { windSpeed } = useWindSpeed();
+    const { pushAlert } = useAlerts();
+
+    // 3. 动画引擎生命周期管理（传入新参数）
     const {
         isPlaying,
         setIsPlaying,
@@ -52,7 +59,7 @@ export default function MapContainer({ onRightPanelToggle }: { onRightPanelToggl
         progressBarRef,
         progressTextRef,
         handleProgressClick
-    } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef);
+    } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert);
 
     // 初始加载
     useEffect(() => {
@@ -361,7 +368,9 @@ export default function MapContainer({ onRightPanelToggle }: { onRightPanelToggl
                 pickedTo={pickedTo}
                 onClearPick={() => { setPickedFrom(null); setPickedTo(null); setPickMode(null); }}
                 onToggle={onRightPanelToggle}
+                isOpen={isRightPanelOpen}
             />
+            <WeatherOverlay />
         </div>
     );
 }

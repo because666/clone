@@ -1,8 +1,16 @@
+import { useWindSpeed } from '../contexts/WindSpeedContext';
+
 interface FlightDetailPanelProps {
     selectedFlight: any;
     energyData: any;
     currentTimeRef: React.MutableRefObject<number>;
     setSelectedFlight: (flight: any) => void;
+}
+
+/** 风速影响因子：以 3 m/s 为基准，偏离越大消耗越高 */
+function calcWindFactor(windSpeed: number): number {
+    const delta = windSpeed - 3;
+    return 1 + 0.03 * delta * delta;
 }
 
 export default function FlightDetailPanel({
@@ -11,7 +19,11 @@ export default function FlightDetailPanel({
     currentTimeRef,
     setSelectedFlight
 }: FlightDetailPanelProps) {
+    const { windSpeed } = useWindSpeed();
+
     if (!selectedFlight) return null;
+
+    const windFactor = calcWindFactor(windSpeed);
 
     return (
         <div className="absolute top-28 left-8 z-30 w-80 bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] text-slate-800 p-6 pointer-events-auto transition-all animate-in fade-in slide-in-from-left-4 overflow-hidden">
@@ -34,17 +46,26 @@ export default function FlightDetailPanel({
                     let idx = timestamps.findIndex((t: number) => t >= currentTimeRef.current);
                     if (idx === -1) idx = timestamps.length - 1;
                     if (idx < 0) idx = 0;
-                    const bat = ed.battery[idx];
-                    const pwr = ed.power[idx];
+
+                    // 原始数据
+                    const rawBat = ed.battery[idx];
+                    const rawPwr = ed.power[idx];
                     const startBat = ed.battery[0];
-                    const validBattery = ed.battery.filter((b: number) => b > 0);
-                    const minBat = validBattery.length > 0 ? Math.min(...validBattery) : 0;
+
+                    // 风速修正：消耗量 = (startBat - rawBat)，乘以 windFactor
+                    const adjustedBat = Math.max(0, startBat - (startBat - rawBat) * windFactor);
+                    const adjustedPwr = rawPwr * windFactor;
+
+                    // 预计降落电量（取全程最低电量并修正）
+                    const rawValidBattery = ed.battery.filter((b: number) => b > 0);
+                    const rawMinBat = rawValidBattery.length > 0 ? Math.min(...rawValidBattery) : 0;
+                    const adjustedMinBat = Math.max(0, startBat - (startBat - rawMinBat) * windFactor);
 
                     return (
                         <div className="flex flex-col gap-3.5 text-sm">
                             <div className="flex justify-between items-center bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
                                 <span className="text-slate-600 font-bold tracking-wide text-xs">当前负荷功率</span>
-                                <span className="font-mono text-indigo-700 font-black tracking-wider">{pwr.toFixed(1)} W</span>
+                                <span className="font-mono text-indigo-700 font-black tracking-wider">{adjustedPwr.toFixed(1)} W</span>
                             </div>
                             <div className="flex justify-between items-center bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
                                 <span className="text-slate-600 font-bold tracking-wide text-xs">出发时电量</span>
@@ -54,16 +75,23 @@ export default function FlightDetailPanel({
                             </div>
                             <div className="flex justify-between items-center bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
                                 <span className="text-slate-600 font-bold tracking-wide text-xs">实时流失电量</span>
-                                <span className="font-mono font-black tracking-wider" style={{ color: bat < 30 ? '#e11d48' : bat < 60 ? '#d97706' : '#059669' }}>
-                                    {bat.toFixed(1)}%
+                                <span className="font-mono font-black tracking-wider" style={{ color: adjustedBat < 30 ? '#e11d48' : adjustedBat < 60 ? '#d97706' : '#059669' }}>
+                                    {adjustedBat.toFixed(1)}%
                                 </span>
                             </div>
                             <div className="flex justify-between items-center bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
                                 <span className="text-slate-600 font-bold tracking-wide text-xs">预计降落电量</span>
-                                <span className="font-mono font-black tracking-wider" style={{ color: minBat < 30 ? '#e11d48' : minBat < 60 ? '#d97706' : '#059669' }}>
-                                    {minBat.toFixed(1)}%
+                                <span className="font-mono font-black tracking-wider" style={{ color: adjustedMinBat < 30 ? '#e11d48' : adjustedMinBat < 60 ? '#d97706' : '#059669' }}>
+                                    {adjustedMinBat.toFixed(1)}%
                                 </span>
                             </div>
+                            {/* 风速影响因子提示 */}
+                            {windFactor > 1.01 && (
+                                <div className="flex justify-between items-center bg-sky-50/60 p-3 rounded-xl border border-sky-200/60 shadow-sm">
+                                    <span className="text-sky-700 font-bold tracking-wide text-xs">风速影响因子</span>
+                                    <span className="font-mono text-sky-700 font-black tracking-wider">×{windFactor.toFixed(2)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between items-center bg-white/60 p-3 rounded-xl border border-white/80 shadow-sm">
                                 <span className="text-slate-600 font-bold tracking-wide text-xs">载重状态</span>
                                 <span className="font-mono text-slate-700 font-black tracking-wider bg-slate-200/50 px-2 py-0.5 rounded shadow-inner">{ed.payload} kg</span>
