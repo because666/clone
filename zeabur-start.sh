@@ -26,7 +26,7 @@ DIRECTORY = Path(__file__).parent / 'frontend' / 'dist'
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from trajectory_lab.server import app as flask_app
+    from trajectory_lab.scripts.server import app as flask_app
 except ImportError as e:
     print(f"⚠️  无法导入 Flask 应用: {e}")
     flask_app = None
