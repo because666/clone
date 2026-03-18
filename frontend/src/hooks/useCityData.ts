@@ -1,11 +1,12 @@
 /**
  * 城市数据加载 Hook
- * 支持分步加载进度追踪和错误处理
+ * 支持分步加载进度追踪、错误处理和自动重试
  */
 
 import { useState, useCallback, useRef } from 'react';
 import type { CityData, UAVPath } from '../types/map';
 import type { StepItem } from '../features/LoadingProgress/StepProgress';
+import { retryWithBackoff } from '../utils/helpers';
 
 export interface LoadingError {
     step: string;
@@ -39,6 +40,9 @@ const DEFAULT_STEPS: StepItem[] = [
     { id: 'energy', label: '加载能耗数据', status: 'pending' }
 ];
 
+const MAX_RETRIES = 3;
+const BASE_DELAY = 1000;
+
 /**
  * 更新步骤状态
  * @param steps - 当前步骤列表
@@ -57,7 +61,7 @@ const updateStepStatus = (
 
 /**
  * 城市数据加载 Hook
- * 提供分步加载进度追踪和错误处理功能
+ * 提供分步加载进度追踪、错误处理和自动重试功能
  */
 export function useCityData(): UseCityDataReturn {
     const [buildingsData, setBuildingsData] = useState<any>(null);
@@ -83,30 +87,44 @@ export function useCityData(): UseCityDataReturn {
     }, []);
 
     /**
-     * 加载单个数据源
+     * 带重试机制的异步数据获取
      * @param url - 数据 URL
      * @param stepId - 步骤 ID
      * @param signal - AbortSignal
+     * @param maxRetries - 最大重试次数
+     * @param baseDelay - 基础延迟毫秒数
      */
-    const fetchWithProgress = async <T,>(
+    const fetchWithRetry = async <T,>(
         url: string,
         stepId: string,
-        signal: AbortSignal
+        signal: AbortSignal,
+        maxRetries: number = MAX_RETRIES,
+        baseDelay: number = BASE_DELAY
     ): Promise<T | null> => {
         setLoadingSteps(prev => updateStepStatus(prev, stepId, 'loading'));
 
         try {
-            const response = await fetch(url, { signal });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            const data = await response.json();
+            const data = await retryWithBackoff(async () => {
+                if (signal.aborted) {
+                    throw new DOMException('请求已取消', 'AbortError');
+                }
+
+                const response = await fetch(url, { signal });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                return response.json() as Promise<T>;
+            }, maxRetries, baseDelay);
+
             setLoadingSteps(prev => updateStepStatus(prev, stepId, 'completed'));
             return data;
         } catch (error) {
             if ((error as Error).name === 'AbortError') {
                 return null;
             }
+
             setLoadingSteps(prev => updateStepStatus(prev, stepId, 'error'));
             throw error;
         }
@@ -149,7 +167,7 @@ export function useCityData(): UseCityDataReturn {
         const cacheBuster = `?t=${Date.now()}`;
 
         try {
-            const buildings = await fetchWithProgress<any>(
+            const buildings = await fetchWithRetry<any>(
                 `${basePath}/buildings_3d.geojson${cacheBuster}`,
                 'buildings',
                 signal
@@ -157,7 +175,7 @@ export function useCityData(): UseCityDataReturn {
 
             if (signal.aborted) return;
 
-            const poiDemandData = await fetchWithProgress<any>(
+            const poiDemandData = await fetchWithRetry<any>(
                 `${basePath}/poi_demand.geojson${cacheBuster}`,
                 'poi_demand',
                 signal
@@ -165,7 +183,7 @@ export function useCityData(): UseCityDataReturn {
 
             if (signal.aborted) return;
 
-            const poiSensitiveData = await fetchWithProgress<any>(
+            const poiSensitiveData = await fetchWithRetry<any>(
                 `${basePath}/poi_sensitive.geojson${cacheBuster}`,
                 'poi_sensitive',
                 signal
@@ -175,7 +193,7 @@ export function useCityData(): UseCityDataReturn {
 
             let trajectoriesData: { trajectories: UAVPath[]; timeRange: { min: number; max: number } } | null = null;
             try {
-                trajectoriesData = await fetchWithProgress<{
+                trajectoriesData = await fetchWithRetry<{
                     trajectories: UAVPath[];
                     timeRange: { min: number; max: number };
                 }>(
@@ -191,7 +209,7 @@ export function useCityData(): UseCityDataReturn {
 
             let energyDataResult: any = null;
             try {
-                energyDataResult = await fetchWithProgress<any>(
+                energyDataResult = await fetchWithRetry<any>(
                     `/data/processed/${city}_energy_predictions.json${cacheBuster}`,
                     'energy',
                     signal
