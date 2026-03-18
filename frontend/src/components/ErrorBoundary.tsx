@@ -43,7 +43,7 @@ const ErrorFallback: React.FC<ErrorFallbackProps> = ({
                 </div>
 
                 <p className="text-slate-400 text-sm mb-4">
-                    {error?.message || '发生了未知错误，请稍后重试'}
+                    {error instanceof Error ? error.message : String(error) || '发生了未知错误，请稍后重试'}
                 </p>
 
                 <div className="flex gap-3">
@@ -70,7 +70,7 @@ interface ErrorBoundaryProps {
     children: React.ReactNode;
     title?: string;
     onRetry?: () => void;
-    onError?: (error: Error, info: React.ErrorInfo) => void;
+    onError?: (error: unknown, info: React.ErrorInfo) => void;
 }
 
 /**

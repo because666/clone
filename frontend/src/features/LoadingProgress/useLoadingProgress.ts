@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { LoadingProgress } from '../../types/feature';
-import { LoadingStage, LoadingStageLabels } from './types';
+import { LoadingStage, LoadingStageLabels, type LoadingStageType } from './types';
 
 interface UseLoadingProgressReturn {
     /** 加载进度状态 */
@@ -13,7 +13,7 @@ interface UseLoadingProgressReturn {
     /** 开始加载 */
     startLoading: () => void;
     /** 更新进度 */
-    updateProgress: (progress: number, stage?: LoadingStage) => void;
+    updateProgress: (progress: number, stage?: LoadingStageType) => void;
     /** 完成加载 */
     completeLoading: () => void;
     /** 设置错误 */
@@ -55,7 +55,7 @@ export function useLoadingProgress(): UseLoadingProgressReturn {
      * @param value - 进度值（0-100）
      * @param stage - 加载阶段
      */
-    const updateProgress = useCallback((value: number, stage?: LoadingStage) => {
+    const updateProgress = useCallback((value: number, stage?: LoadingStageType) => {
         setProgress(prev => ({
             ...prev,
             progress: Math.min(100, Math.max(0, value)),

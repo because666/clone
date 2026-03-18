@@ -26,24 +26,26 @@ export interface TourState {
 export const TOUR_STORAGE_KEY = 'aetherweave_tour_state';
 
 /**
- * 预定义引导步骤 ID
+ * 预定义引导步骤 ID 常量
  */
-export enum TourStepId {
+export const TourStepId = {
     /** 欢迎介绍 */
-    WELCOME = 'welcome',
+    WELCOME: 'welcome',
     /** 地图控制 */
-    MAP_CONTROLS = 'map_controls',
+    MAP_CONTROLS: 'map_controls',
     /** 城市切换 */
-    CITY_SWITCH = 'city_switch',
+    CITY_SWITCH: 'city_switch',
     /** 播放控制 */
-    PLAYBACK_CONTROLS = 'playback_controls',
+    PLAYBACK_CONTROLS: 'playback_controls',
     /** 轨迹详情 */
-    FLIGHT_DETAILS = 'flight_details',
+    FLIGHT_DETAILS: 'flight_details',
     /** 算法实验室 */
-    ALGO_LAB = 'algo_lab',
+    ALGO_LAB: 'algo_lab',
     /** 完成 */
-    COMPLETED = 'completed'
-}
+    COMPLETED: 'completed'
+} as const;
+
+export type TourStepIdType = typeof TourStepId[keyof typeof TourStepId];
 
 /**
  * 默认引导步骤配置

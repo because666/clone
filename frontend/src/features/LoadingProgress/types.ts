@@ -7,31 +7,33 @@ import type { LoadingProgress, LoadingProgressConfig } from '../../types/feature
 export type { LoadingProgress, LoadingProgressConfig };
 
 /**
- * 加载进度阶段枚举
+ * 加载进度阶段常量
  */
-export enum LoadingStage {
+export const LoadingStage = {
     /** 初始化 */
-    INITIALIZING = 'initializing',
+    INITIALIZING: 'initializing',
     /** 加载建筑数据 */
-    LOADING_BUILDINGS = 'loading_buildings',
+    LOADING_BUILDINGS: 'loading_buildings',
     /** 加载 POI 数据 */
-    LOADING_POI = 'loading_poi',
+    LOADING_POI: 'loading_poi',
     /** 加载轨迹数据 */
-    LOADING_TRAJECTORIES = 'loading_trajectories',
+    LOADING_TRAJECTORIES: 'loading_trajectories',
     /** 加载能耗数据 */
-    LOADING_ENERGY = 'loading_energy',
+    LOADING_ENERGY: 'loading_energy',
     /** 渲染场景 */
-    RENDERING = 'rendering',
+    RENDERING: 'rendering',
     /** 完成 */
-    COMPLETED = 'completed',
+    COMPLETED: 'completed',
     /** 错误 */
-    ERROR = 'error'
-}
+    ERROR: 'error'
+} as const;
+
+export type LoadingStageType = typeof LoadingStage[keyof typeof LoadingStage];
 
 /**
  * 加载阶段描述映射
  */
-export const LoadingStageLabels: Record<LoadingStage, string> = {
+export const LoadingStageLabels: Record<string, string> = {
     [LoadingStage.INITIALIZING]: '正在初始化...',
     [LoadingStage.LOADING_BUILDINGS]: '正在加载建筑数据...',
     [LoadingStage.LOADING_POI]: '正在加载 POI 数据...',
