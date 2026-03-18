@@ -73,11 +73,22 @@ export function useCityData(): UseCityDataReturn {
     const [loadingSteps, setLoadingSteps] = useState<StepItem[]>(DEFAULT_STEPS);
     const [loadingError, setLoadingError] = useState<LoadingError | null>(null);
 
+    // 使用 ref 存储当前步骤状态，避免依赖循环
+    const loadingStepsRef = useRef<StepItem[]>(DEFAULT_STEPS);
+
     const timeRangeRef = useRef({ min: 0, max: 0 });
     const currentTimeRef = useRef(0);
     const dataCacheRef = useRef<Map<string, CityData>>(new Map());
     const currentCityRef = useRef("shenzhen");
     const abortControllerRef = useRef<AbortController | null>(null);
+
+    /**
+     * 更新步骤状态（同步更新 ref 和 state）
+     */
+    const updateSteps = useCallback((stepId: string, status: StepItem['status']) => {
+        loadingStepsRef.current = updateStepStatus(loadingStepsRef.current, stepId, status);
+        setLoadingSteps(loadingStepsRef.current);
+    }, []);
 
     /**
      * 清除错误状态
@@ -101,7 +112,7 @@ export function useCityData(): UseCityDataReturn {
         maxRetries: number = MAX_RETRIES,
         baseDelay: number = BASE_DELAY
     ): Promise<T | null> => {
-        setLoadingSteps(prev => updateStepStatus(prev, stepId, 'loading'));
+        updateSteps(stepId, 'loading');
 
         try {
             const data = await retryWithBackoff(async () => {
@@ -118,14 +129,14 @@ export function useCityData(): UseCityDataReturn {
                 return response.json() as Promise<T>;
             }, maxRetries, baseDelay);
 
-            setLoadingSteps(prev => updateStepStatus(prev, stepId, 'completed'));
+            updateSteps(stepId, 'completed');
             return data;
         } catch (error) {
             if ((error as Error).name === 'AbortError') {
                 return null;
             }
 
-            setLoadingSteps(prev => updateStepStatus(prev, stepId, 'error'));
+            updateSteps(stepId, 'error');
             throw error;
         }
     };
@@ -147,7 +158,8 @@ export function useCityData(): UseCityDataReturn {
             setEnergyData(cached.energyData);
             timeRangeRef.current = cached.timeRange;
             currentTimeRef.current = 0;
-            setLoadingSteps(DEFAULT_STEPS.map(s => ({ ...s, status: 'completed' })));
+            loadingStepsRef.current = DEFAULT_STEPS.map(s => ({ ...s, status: 'completed' }));
+            setLoadingSteps(loadingStepsRef.current);
             setLoadingError(null);
             if (onFlightClear) onFlightClear();
             return;
@@ -161,7 +173,8 @@ export function useCityData(): UseCityDataReturn {
 
         setIsLoadingCity(true);
         setLoadingError(null);
-        setLoadingSteps(DEFAULT_STEPS);
+        loadingStepsRef.current = [...DEFAULT_STEPS];
+        setLoadingSteps(loadingStepsRef.current);
 
         const basePath = `/data/processed/${city}`;
         const cacheBuster = `?t=${Date.now()}`;
@@ -202,7 +215,7 @@ export function useCityData(): UseCityDataReturn {
                     signal
                 );
             } catch {
-                setLoadingSteps(prev => updateStepStatus(prev, 'trajectories', 'completed'));
+                updateSteps('trajectories', 'completed');
             }
 
             if (signal.aborted) return;
@@ -215,7 +228,7 @@ export function useCityData(): UseCityDataReturn {
                     signal
                 );
             } catch {
-                setLoadingSteps(prev => updateStepStatus(prev, 'energy', 'completed'));
+                updateSteps('energy', 'completed');
             }
 
             if (signal.aborted) return;
@@ -249,7 +262,7 @@ export function useCityData(): UseCityDataReturn {
             }
 
             const errorMessage = error instanceof Error ? error.message : '未知错误';
-            const errorStep = loadingSteps.find(s => s.status === 'error');
+            const errorStep = loadingStepsRef.current.find(s => s.status === 'error');
 
             setLoadingError({
                 step: errorStep?.id || 'unknown',
@@ -264,7 +277,7 @@ export function useCityData(): UseCityDataReturn {
             setIsLoadingCity(false);
             abortControllerRef.current = null;
         }
-    }, [loadingSteps]);
+    }, [updateSteps]); // 只依赖 updateSteps，它是稳定的
 
     /**
      * 重新加载当前城市的轨迹数据
