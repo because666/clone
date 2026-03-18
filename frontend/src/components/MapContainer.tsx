@@ -17,9 +17,11 @@ import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
 import WeatherOverlay from './WeatherOverlay';
 import { uavModelBuffer } from '../utils/animation';
+import { StepProgress } from '../features/LoadingProgress/StepProgress';
+import { ErrorAlert } from './ErrorAlert';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = false }: { onRightPanelToggle?: (open: boolean) => void, isRightPanelOpen?: boolean } = {}) {
-    // 1. 数据按需加载和缓存
     const {
         buildingsData,
         poiDemand,
@@ -27,13 +29,15 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         trajectories,
         energyData,
         isLoadingCity,
+        loadingSteps,
+        loadingError,
         timeRangeRef,
         currentTimeRef,
         loadCityData,
-        reloadCurrentTrajectories
+        reloadCurrentTrajectories,
+        clearError
     } = useCityData();
 
-    // 2. 状态管理
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
     const [pickMode, setPickMode] = useState<'from' | 'to' | null>(null);
     const [pickedFrom, setPickedFrom] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
@@ -46,11 +50,9 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
     const mapRef = useRef<MapRef>(null);
     const deckRef = useRef<any>(null);
 
-    // 风速和告警
     const { windSpeed } = useWindSpeed();
     const { pushAlert } = useAlerts();
 
-    // 3. 动画引擎生命周期管理（传入新参数）
     const {
         isPlaying,
         setIsPlaying,
@@ -61,12 +63,10 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         handleProgressClick
     } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert);
 
-    // 初始加载
     useEffect(() => {
         loadCityData("shenzhen", () => setSelectedFlight(null));
     }, [loadCityData]);
 
-    // 城市切换回调
     const handleCityJump = useCallback((city: string) => {
         setCurrentCity(city);
         setIsDropdownOpen(false);
@@ -81,7 +81,6 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         loadCityData(city, () => setSelectedFlight(null));
     }, [loadCityData]);
 
-    // ViewState 变化
     const handleViewStateChange = useCallback(({ viewState }: any) => {
         const { longitude, latitude, zoom, pitch, bearing } = viewState;
         setViewState({ longitude, latitude, zoom, pitch, bearing, maxPitch: INITIAL_VIEW_STATE.maxPitch });
@@ -122,7 +121,6 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         }
     }, []);
 
-    // ===== Layer Definitions ===== 
     const sensitivePoints = useMemo(() =>
         poiSensitive?.features?.filter((f: any) => f.geometry.type === 'Point') || [],
         [poiSensitive]
@@ -193,9 +191,9 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             wireframe: true,
             getLineWidth: 2,
             getPosition: (d: any) => d.geometry.coordinates,
-            getFillColor: [255, 60, 60, 25], // 退回更浅的透明度25，保留多边形
+            getFillColor: [255, 60, 60, 25],
             getLineColor: [255, 80, 80, 200],
-            getElevation: 400, // 高度 400，确保绝对超过无人机航线
+            getElevation: 400,
         }),
     ], [buildingsData, poiDemand, poiSensitive, sensitivePoints, currentCity, pickedFrom, pickedTo, pickMode, handleDemandPick]);
 
@@ -241,11 +239,11 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             getColor: (d: any) => {
                 if (d.trajectory && energyData && energyData[d.trajectory.id]) {
                     const payload = energyData[d.trajectory.id].payload;
-                    if (payload >= 2.0) return [245, 158, 11];  // 琥珀色/黄 (对比度强)
-                    if (payload >= 1.0) return [16, 185, 129];  // 翠绿色 (对比度强)
-                    return [14, 165, 233]; // 青蓝色
+                    if (payload >= 2.0) return [245, 158, 11];
+                    if (payload >= 1.0) return [16, 185, 129];
+                    return [14, 165, 233];
                 }
-                return [14, 165, 233]; // 默认青蓝色
+                return [14, 165, 233];
             },
             widthMinPixels: 2.5,
             trailLength: 100,
@@ -293,84 +291,105 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         })
     ].filter(Boolean);
 
+    const handleRetryLoad = useCallback(() => {
+        if (loadingError) {
+            clearError();
+            loadCityData(loadingError.city, () => setSelectedFlight(null));
+        }
+    }, [loadingError, clearError, loadCityData]);
+
     return (
-        <div
-            className="absolute inset-0 z-0"
-            style={{ background: '#f0f0f0' }}
-            onContextMenu={(e) => e.preventDefault()}
+        <ErrorBoundary
+            title="地图加载错误"
+            onRetry={() => loadCityData(currentCity, () => setSelectedFlight(null))}
         >
-            <DeckGL
-                ref={deckRef}
-                initialViewState={viewState}
-                controller={{
-                    doubleClickZoom: true,
-                    touchRotate: true,
-                    dragRotate: true,
-                    scrollZoom: true,
-                    dragPan: true,
-                    keyboard: true
-                }}
-                layers={layers}
-                onViewStateChange={handleViewStateChange}
+            <div
+                className="absolute inset-0 z-0"
+                style={{ background: '#f0f0f0' }}
+                onContextMenu={(e) => e.preventDefault()}
             >
-                <MapGL
-                    ref={mapRef}
-                    mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-                    reuseMaps
-                    onLoad={handleMapLoad}
-                    maxPitch={INITIAL_VIEW_STATE.maxPitch}
+                <DeckGL
+                    ref={deckRef}
+                    initialViewState={viewState}
+                    controller={{
+                        doubleClickZoom: true,
+                        touchRotate: true,
+                        dragRotate: true,
+                        scrollZoom: true,
+                        dragPan: true,
+                        keyboard: true
+                    }}
+                    layers={layers}
+                    onViewStateChange={handleViewStateChange}
+                >
+                    <MapGL
+                        ref={mapRef}
+                        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+                        reuseMaps
+                        onLoad={handleMapLoad}
+                        maxPitch={INITIAL_VIEW_STATE.maxPitch}
+                    />
+                </DeckGL>
+
+                <HoverTooltip hoverInfo={hoverInfo} />
+
+                <FlightDetailPanel
+                    selectedFlight={selectedFlight}
+                    energyData={energyData}
+                    currentTimeRef={currentTimeRef}
+                    setSelectedFlight={setSelectedFlight}
                 />
-            </DeckGL>
 
-            <HoverTooltip hoverInfo={hoverInfo} />
-
-            <FlightDetailPanel
-                selectedFlight={selectedFlight}
-                energyData={energyData}
-                currentTimeRef={currentTimeRef}
-                setSelectedFlight={setSelectedFlight}
-            />
-
-            {isLoadingCity && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
-                    <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-2xl px-8 py-4 flex items-center gap-3 shadow-2xl">
-                        <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-cyan-300 text-sm font-medium">加载城市数据...</span>
+                {isLoadingCity && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
+                        <StepProgress
+                            steps={loadingSteps}
+                            title="正在加载城市数据"
+                        />
                     </div>
+                )}
+
+                {loadingError && !isLoadingCity && (
+                    <ErrorAlert
+                        title="数据加载失败"
+                        message={`加载 ${loadingError.city} 的数据时出错：${loadingError.message}`}
+                        onRetry={handleRetryLoad}
+                        onDismiss={clearError}
+                    />
+                )}
+
+                <div className="absolute top-4 left-4 bg-white/80 backdrop-blur text-slate-700 text-xs px-3 py-1.5 rounded-lg shadow border border-slate-200 z-10 pointer-events-none">
+                    💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
                 </div>
-            )}
 
-            <div className="absolute top-4 left-4 bg-white/80 backdrop-blur text-slate-700 text-xs px-3 py-1.5 rounded-lg shadow border border-slate-200 z-10 pointer-events-none">
-                💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
+                <PlaybackControls
+                    isPlaying={isPlaying}
+                    setIsPlaying={setIsPlaying}
+                    animationSpeed={animationSpeed}
+                    setAnimationSpeed={setAnimationSpeed}
+                    currentCity={currentCity}
+                    handleCityJump={handleCityJump}
+                    isDropdownOpen={isDropdownOpen}
+                    setIsDropdownOpen={setIsDropdownOpen}
+                    progressBarRef={progressBarRef}
+                    progressTextRef={progressTextRef}
+                    handleProgressClick={handleProgressClick}
+                    timeRangeMax={timeRangeRef.current.max}
+                />
+
+                <AlgoLabPanel
+                    city={currentCity}
+                    onTrajectoriesUpdated={reloadCurrentTrajectories}
+                    pickMode={pickMode}
+                    setPickMode={setPickMode}
+                    pickedFrom={pickedFrom}
+                    pickedTo={pickedTo}
+                    onClearPick={() => { setPickedFrom(null); setPickedTo(null); setPickMode(null); }}
+                    onToggle={onRightPanelToggle}
+                    isOpen={isRightPanelOpen}
+                />
+                <WeatherOverlay />
             </div>
-
-            <PlaybackControls
-                isPlaying={isPlaying}
-                setIsPlaying={setIsPlaying}
-                animationSpeed={animationSpeed}
-                setAnimationSpeed={setAnimationSpeed}
-                currentCity={currentCity}
-                handleCityJump={handleCityJump}
-                isDropdownOpen={isDropdownOpen}
-                setIsDropdownOpen={setIsDropdownOpen}
-                progressBarRef={progressBarRef}
-                progressTextRef={progressTextRef}
-                handleProgressClick={handleProgressClick}
-                timeRangeMax={timeRangeRef.current.max}
-            />
-
-            <AlgoLabPanel
-                city={currentCity}
-                onTrajectoriesUpdated={reloadCurrentTrajectories}
-                pickMode={pickMode}
-                setPickMode={setPickMode}
-                pickedFrom={pickedFrom}
-                pickedTo={pickedTo}
-                onClearPick={() => { setPickedFrom(null); setPickedTo(null); setPickMode(null); }}
-                onToggle={onRightPanelToggle}
-                isOpen={isRightPanelOpen}
-            />
-            <WeatherOverlay />
-        </div>
+        </ErrorBoundary>
     );
 }
