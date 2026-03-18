@@ -7,6 +7,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { CityData, UAVPath } from '../types/map';
 import type { StepItem } from '../features/LoadingProgress/StepProgress';
 import { retryWithBackoff } from '../utils/helpers';
+import { LRUCache } from '../utils/cache';
 
 export interface LoadingError {
     step: string;
@@ -42,6 +43,16 @@ const DEFAULT_STEPS: StepItem[] = [
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
+const MAX_CONCURRENT = 3; // 最大并发数
+
+/**
+ * 数据任务返回类型
+ */
+interface DataTaskResult {
+    type: 'buildings' | 'poi_demand' | 'poi_sensitive' | 'trajectories' | 'energy';
+    data: any;
+    error?: unknown;
+}
 
 /**
  * 更新步骤状态
@@ -58,6 +69,37 @@ const updateStepStatus = (
         step.id === stepId ? { ...step, status } : step
     );
 };
+
+/**
+ * 并发控制函数
+ * @param tasks - 任务列表
+ * @param maxConcurrent - 最大并发数
+ * @returns 所有任务的结果
+ */
+async function runWithConcurrency(
+    tasks: Array<() => Promise<DataTaskResult>>,
+    maxConcurrent: number
+): Promise<DataTaskResult[]> {
+    const results: DataTaskResult[] = new Array(tasks.length);
+    const executing: Promise<void>[] = [];
+
+    for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        const promise = task().then(result => {
+            results[i] = result;
+        });
+
+        executing.push(promise);
+
+        if (executing.length >= maxConcurrent) {
+            await Promise.race(executing);
+            executing.splice(executing.findIndex(p => p === promise), 1);
+        }
+    }
+
+    await Promise.all(executing);
+    return results;
+}
 
 /**
  * 城市数据加载 Hook
@@ -78,7 +120,8 @@ export function useCityData(): UseCityDataReturn {
 
     const timeRangeRef = useRef({ min: 0, max: 0 });
     const currentTimeRef = useRef(0);
-    const dataCacheRef = useRef<Map<string, CityData>>(new Map());
+    // 使用 LRU 缓存替代普通 Map，最大缓存 5 个城市
+    const dataCacheRef = useRef<LRUCache<CityData>>(new LRUCache<CityData>({ maxSize: 5 }));
     const currentCityRef = useRef("shenzhen");
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -180,58 +223,101 @@ export function useCityData(): UseCityDataReturn {
         const cacheBuster = `?t=${Date.now()}`;
 
         try {
-            const buildings = await fetchWithRetry<any>(
-                `${basePath}/buildings_3d.geojson${cacheBuster}`,
-                'buildings',
-                signal
-            );
+            // 定义所有数据加载任务
+            const dataTasks = [
+                // 任务 1: 建筑数据
+                async () => {
+                    try {
+                        const data = await fetchWithRetry<any>(
+                            `${basePath}/buildings_3d.geojson${cacheBuster}`,
+                            'buildings',
+                            signal
+                        );
+                        return { type: 'buildings' as const, data };
+                    } catch (error) {
+                        if ((error as Error).name === 'AbortError') throw error;
+                        return { type: 'buildings' as const, data: null, error };
+                    }
+                },
+                // 任务 2: POI 需求点
+                async () => {
+                    try {
+                        const data = await fetchWithRetry<any>(
+                            `${basePath}/poi_demand.geojson${cacheBuster}`,
+                            'poi_demand',
+                            signal
+                        );
+                        return { type: 'poi_demand' as const, data };
+                    } catch (error) {
+                        if ((error as Error).name === 'AbortError') throw error;
+                        return { type: 'poi_demand' as const, data: null, error };
+                    }
+                },
+                // 任务 3: POI 敏感点
+                async () => {
+                    try {
+                        const data = await fetchWithRetry<any>(
+                            `${basePath}/poi_sensitive.geojson${cacheBuster}`,
+                            'poi_sensitive',
+                            signal
+                        );
+                        return { type: 'poi_sensitive' as const, data };
+                    } catch (error) {
+                        if ((error as Error).name === 'AbortError') throw error;
+                        return { type: 'poi_sensitive' as const, data: null, error };
+                    }
+                },
+                // 任务 4: 轨迹数据（可选）
+                async () => {
+                    try {
+                        const data = await fetchWithRetry<{
+                            trajectories: UAVPath[];
+                            timeRange: { min: number; max: number };
+                        }>(
+                            `/data/processed/trajectories/${city}_uav_trajectories.json${cacheBuster}`,
+                            'trajectories',
+                            signal
+                        );
+                        return { type: 'trajectories' as const, data };
+                    } catch {
+                        updateSteps('trajectories', 'completed');
+                        return { type: 'trajectories' as const, data: null };
+                    }
+                },
+                // 任务 5: 能耗数据（可选）
+                async () => {
+                    try {
+                        const data = await fetchWithRetry<any>(
+                            `/data/processed/${city}_energy_predictions.json${cacheBuster}`,
+                            'energy',
+                            signal
+                        );
+                        return { type: 'energy' as const, data };
+                    } catch {
+                        updateSteps('energy', 'completed');
+                        return { type: 'energy' as const, data: null };
+                    }
+                }
+            ];
+
+            // 使用并发控制并行加载所有数据
+            const results = await runWithConcurrency(dataTasks, MAX_CONCURRENT);
 
             if (signal.aborted) return;
 
-            const poiDemandData = await fetchWithRetry<any>(
-                `${basePath}/poi_demand.geojson${cacheBuster}`,
-                'poi_demand',
-                signal
-            );
-
-            if (signal.aborted) return;
-
-            const poiSensitiveData = await fetchWithRetry<any>(
-                `${basePath}/poi_sensitive.geojson${cacheBuster}`,
-                'poi_sensitive',
-                signal
-            );
-
-            if (signal.aborted) return;
-
-            let trajectoriesData: { trajectories: UAVPath[]; timeRange: { min: number; max: number } } | null = null;
-            try {
-                trajectoriesData = await fetchWithRetry<{
-                    trajectories: UAVPath[];
-                    timeRange: { min: number; max: number };
-                }>(
-                    `/data/processed/trajectories/${city}_uav_trajectories.json${cacheBuster}`,
-                    'trajectories',
-                    signal
-                );
-            } catch {
-                updateSteps('trajectories', 'completed');
+            // 检查是否有错误
+            const errors = results.filter(r => 'error' in r && r.error);
+            if (errors.length > 0) {
+                const firstError = errors[0];
+                throw firstError.error;
             }
 
-            if (signal.aborted) return;
-
-            let energyDataResult: any = null;
-            try {
-                energyDataResult = await fetchWithRetry<any>(
-                    `/data/processed/${city}_energy_predictions.json${cacheBuster}`,
-                    'energy',
-                    signal
-                );
-            } catch {
-                updateSteps('energy', 'completed');
-            }
-
-            if (signal.aborted) return;
+            // 提取数据
+            const buildings = results.find(r => r.type === 'buildings')?.data;
+            const poiDemandData = results.find(r => r.type === 'poi_demand')?.data;
+            const poiSensitiveData = results.find(r => r.type === 'poi_sensitive')?.data;
+            const trajectoriesData = results.find(r => r.type === 'trajectories')?.data;
+            const energyDataResult = results.find(r => r.type === 'energy')?.data;
 
             const cityTrajectories = trajectoriesData?.trajectories || [];
             const cityTimeRange = trajectoriesData?.timeRange || { min: 0, max: 0 };

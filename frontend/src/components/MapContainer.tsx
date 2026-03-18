@@ -20,6 +20,7 @@ import { uavModelBuffer } from '../utils/animation';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
 import { ErrorAlert } from './ErrorAlert';
 import { ErrorBoundary } from './ErrorBoundary';
+import { MapSkeleton } from './MapSkeleton';
 
 export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = false }: { onRightPanelToggle?: (open: boolean) => void, isRightPanelOpen?: boolean } = {}) {
     const {
@@ -126,8 +127,10 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         [poiSensitive]
     );
 
-    const staticLayers = useMemo(() => [
-        new GeoJsonLayer({
+    // 渐进式渲染：根据加载状态决定是否渲染各图层
+    const buildingsLayer = useMemo(() => {
+        if (!buildingsData) return null;
+        return new GeoJsonLayer({
             id: 'buildings-layer',
             data: buildingsData,
             extruded: true,
@@ -143,9 +146,12 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             autoHighlight: true,
             highlightColor: [80, 140, 220, 255],
             material: { ambient: 0.4, diffuse: 0.6, shininess: 32, specularColor: [220, 230, 240] },
-        }),
+        });
+    }, [buildingsData]);
 
-        new GeoJsonLayer({
+    const poiDemandLayer = useMemo(() => {
+        if (!poiDemand) return null;
+        return new GeoJsonLayer({
             id: 'poi-demand-layer',
             data: poiDemand,
             stroked: true,
@@ -166,9 +172,12 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             onClick: handleDemandPick,
             onHover: (info: any) => setHoverInfo(info),
             cursor: pickMode !== null ? 'crosshair' : 'pointer',
-        } as any),
+        } as any);
+    }, [poiDemand, pickedFrom, pickedTo, pickMode, handleDemandPick]);
 
-        new ColumnLayer({
+    const poiSensitiveLayer = useMemo(() => {
+        if (!sensitivePoints.length) return null;
+        return new ColumnLayer({
             id: 'poi-sensitive-point-layer',
             data: sensitivePoints,
             diskResolution: 20,
@@ -194,8 +203,17 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             getFillColor: [255, 60, 60, 25],
             getLineColor: [255, 80, 80, 200],
             getElevation: 400,
-        }),
-    ], [buildingsData, poiDemand, poiSensitive, sensitivePoints, currentCity, pickedFrom, pickedTo, pickMode, handleDemandPick]);
+        });
+    }, [sensitivePoints]);
+
+    // 组合静态图层（渐进式渲染）
+    const staticLayers = useMemo(() => {
+        const layers = [];
+        if (buildingsLayer) layers.push(buildingsLayer);
+        if (poiDemandLayer) layers.push(poiDemandLayer);
+        if (poiSensitiveLayer) layers.push(poiSensitiveLayer);
+        return layers;
+    }, [buildingsLayer, poiDemandLayer, poiSensitiveLayer]);
 
     const activeUAVs = useMemo(() => uavModelBuffer.filter(u => u.isActive), [uavModelBuffer]);
 
@@ -340,11 +358,19 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                     setSelectedFlight={setSelectedFlight}
                 />
 
+                {/* 骨架屏 - 在数据加载完成前显示 */}
+                {isLoadingCity && (
+                    <MapSkeleton loadingSteps={loadingSteps} />
+                )}
+
+                {/* 进度条 - 显示在骨架屏上方 */}
                 {isLoadingCity && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
                         <StepProgress
                             steps={loadingSteps}
                             title="正在加载城市数据"
+                            isLoading={isLoadingCity}
+                            hideDelay={500}
                         />
                     </div>
                 )}
