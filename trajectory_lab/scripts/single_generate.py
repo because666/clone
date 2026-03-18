@@ -2,19 +2,7 @@
 single_generate.py — 指定两点生成单条飞行轨迹
 
 用法:
-    python trajectory_lab/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
-    python trajectory_lab/single_generate.py --city shenzhen --from-latlon 22.53,113.93 --to-latlon 22.55,113.95
-
-功能:
-  1. 通过 poi_id 或直接经纬度指定起降点
-  2. 验证起降点是否在禁飞区内（若在则拒绝）
-  3. 调用 planner 生成单条轨迹
-  4. 输出到前端可读路径（仅包含这一条轨迹，方便审校）
-  5. 同时将轨迹信息打印到终端
-
-可选参数:
-  --append   追加到现有 JSON 而非覆盖（默认覆盖）
-  --buffer   起降点净化额外缓冲（米），默认 0
+    python trajectory_lab/scripts/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
 """
 import sys
 import json
@@ -23,12 +11,12 @@ import argparse
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from trajectory_lab.core.poi_loader import load_city_pois
 from trajectory_lab.core.planner import plan
-from trajectory_lab.batch_generate import build_output
+from trajectory_lab.scripts.batch_generate import build_output
 
 logging.basicConfig(
     level=logging.INFO,

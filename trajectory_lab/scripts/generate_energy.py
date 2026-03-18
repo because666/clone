@@ -3,10 +3,16 @@ import numpy as np
 import json
 import math
 import os
+import sys
+from pathlib import Path
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 import joblib
+
+# 引入 ROOT 路径管理
+ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT))
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     R = 6371000  # Radius of earth in meters
@@ -20,8 +26,9 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
 def train_model():
     print("Loading flight detail data...")
-    # This might take a bit to load 15MB of CSV
-    df = pd.read_csv('../data/processed/airlab_energy/flights_detail.csv')
+    # 使用 ROOT 路径确保定位准确
+    data_path = ROOT / 'data' / 'processed' / 'airlab_energy' / 'flights_detail.csv'
+    df = pd.read_csv(str(data_path))
     
     # We will use airspeed, vertspd, and payload to predict power
     features = ['airspeed', 'vertspd', 'payload']
@@ -46,14 +53,15 @@ def train_model():
     r2 = r2_score(y_test, y_pred)
     print(f"RMSE: {rmse:.2f} W, R2: {r2:.4f}")
     
-    # Save the model for future use
-    os.makedirs('models', exist_ok=True)
-    joblib.dump(model, 'models/energy_rf_model.pkl')
+    # Save the model relative to trajectory_lab
+    model_dir = ROOT / 'trajectory_lab' / 'models'
+    model_dir.mkdir(exist_ok=True)
+    joblib.dump(model, str(model_dir / 'energy_rf_model.pkl'))
     return model
 
 def predict_energy_for_trajectories(model, city='shenzhen'):
-    traj_path = f'../data/processed/trajectories/{city}_uav_trajectories.json'
-    out_path = f'../data/processed/{city}_energy_predictions.json'
+    traj_path = ROOT / 'frontend' / 'public' / 'data' / 'processed' / 'trajectories' / f'{city}_uav_trajectories.json'
+    out_path = ROOT / 'data' / 'processed' / f'{city}_energy_predictions.json'
     
     print(f"Loading trajectories from {traj_path}...")
     with open(traj_path, 'r', encoding='utf-8') as f:
@@ -67,8 +75,6 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
     predictions = {}
     
     # Assumption for Battery: Let's assume a typical delivery drone capacity
-    # e.g., 100 Wh = 360000 Joules full charge for a compact drone like DJI Mavic 3
-    # Or for a slightly larger one maybe 200 Wh (720,000 W*s)
     BATTERY_CAPACITY_WS = 360000.0 
     
     print(f"Generating predictions for {len(trajectories)} flights...")
@@ -88,7 +94,7 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
         battery_pct = []
         
         current_battery_ws = BATTERY_CAPACITY_WS
-        # Start at 100% (with slight random variation for realism, maybe 95-100)
+        # Start at 100%
         start_pct = np.random.uniform(90.0, 100.0)
         current_battery_ws = current_battery_ws * (start_pct / 100.0)
         
@@ -125,9 +131,7 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
         # Calculate battery drain
         for i in range(n_points):
             pwr = pred_powers[i]
-            # Add some noise to make it look realistic and less perfectly smooth
             pwr += np.random.normal(0, pwr * 0.05) 
-            # clamp min power (drone still needs power to hover/descend)
             pwr = max(50.0, pwr) 
             powers.append(round(pwr, 2))
             
@@ -151,10 +155,10 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
     print("Done!")
 
 if __name__ == "__main__":
-    model_path = 'models/energy_rf_model.pkl'
-    if os.path.exists(model_path):
+    model_path = ROOT / 'trajectory_lab' / 'models' / 'energy_rf_model.pkl'
+    if model_path.exists():
         print("Loading existing model...")
-        model = joblib.load(model_path)
+        model = joblib.load(str(model_path))
     else:
         model = train_model()
         

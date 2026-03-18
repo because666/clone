@@ -1,0 +1,141 @@
+import { useEffect, useRef } from 'react';
+import { useWeather } from '../contexts/WeatherContext';
+import { useWindSpeed } from '../contexts/WindSpeedContext';
+
+export default function WeatherOverlay() {
+    const { weather } = useWeather();
+    const { windSpeed } = useWindSpeed();
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        let animationFrameId: number;
+        let particles: any[] = [];
+        const w = (canvas.width = window.innerWidth);
+        const h = (canvas.height = window.innerHeight);
+
+        const createParticles = () => {
+            particles = [];
+            let count = 0;
+            if (weather === 'rainy') count = 400;
+            else if (weather === 'snowy') count = 150;
+            else if (weather === 'hailing') count = 100;
+            else if (weather === 'cloudy') count = 8; // Fewer but larger clouds
+
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    l: Math.random() * 25 + 15,
+                    v: Math.random() * 5 + 8,
+                    r: weather === 'cloudy' ? Math.random() * 250 + 200 : Math.random() * 3 + 1, // Larger clouds
+                    o: weather === 'cloudy' ? Math.random() * 0.2 + 0.15 : Math.random() * 0.5 + 0.3, // Higher core opacity
+                    speed: Math.random() * 0.4 + 0.1
+                });
+            }
+        };
+
+        const draw = () => {
+            ctx.clearRect(0, 0, w, h);
+            
+            if (weather === 'sunny') {
+                const gradient = ctx.createRadialGradient(w * 0.8, h * 0.1, 0, w * 0.8, h * 0.1, 400);
+                gradient.addColorStop(0, 'rgba(255, 230, 150, 0.15)');
+                gradient.addColorStop(0.5, 'rgba(255, 200, 100, 0.05)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, w, h);
+            } else if (weather === 'cloudy') {
+                // Dynamic drifting clouds with richer appearance
+                particles.forEach(p => {
+                    // Create a subtle cloud gradient
+                    const cloudGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+                    cloudGrad.addColorStop(0, `rgba(180, 190, 210, ${p.o * 1.5})`); // Center is thicker
+                    cloudGrad.addColorStop(0.6, `rgba(200, 210, 230, ${p.o})`);
+                    cloudGrad.addColorStop(1, `rgba(255, 255, 255, 0)`);
+                    
+                    ctx.fillStyle = cloudGrad;
+                    ctx.beginPath();
+                    // Multi-layer cloud shape
+                    ctx.ellipse(p.x, p.y, p.r, p.r * 0.5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Add a secondary blob for volume
+                    ctx.beginPath();
+                    ctx.ellipse(p.x + p.r * 0.3, p.y - p.r * 0.1, p.r * 0.6, p.r * 0.4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Move based on wind
+                    p.x += (p.speed + windSpeed * 0.1);
+                    if (p.x > w + p.r) {
+                        p.x = -p.r;
+                        p.y = Math.random() * h;
+                    }
+                });
+            } else if (weather === 'rainy') {
+                // Heavy rain
+                ctx.strokeStyle = 'rgba(100, 140, 200, 0.7)'; // Darker, more visible
+                ctx.lineWidth = 1.5;
+                particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    const tilt = windSpeed * 3;
+                    ctx.lineTo(p.x + tilt, p.y + p.l * 1.5); // Longer drops
+                    ctx.stroke();
+                    p.y += p.v * 1.8; // Faster
+                    p.x += tilt / 2;
+                    if (p.y > h) { p.y = -p.l * 1.5; p.x = Math.random() * (w + tilt) - tilt; }
+                });
+            } else if (weather === 'snowy') {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fill();
+                    p.y += p.v * 0.4;
+                    p.x += Math.sin(p.y / 50 + p.x) * 1.5 + (windSpeed * 0.3);
+                    if (p.y > h) { p.y = -p.r; p.x = Math.random() * w; }
+                });
+            } else if (weather === 'hailing') {
+                ctx.fillStyle = 'rgba(230, 240, 255, 0.8)';
+                particles.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r + 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    p.y += p.v * 2;
+                    p.x += windSpeed * 0.5;
+                    if (p.y > h) { p.y = -p.r; p.x = Math.random() * w; }
+                });
+            }
+
+            animationFrameId = requestAnimationFrame(draw);
+        };
+
+        createParticles();
+        draw();
+
+        const handleResize = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            createParticles();
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [weather, windSpeed]);
+
+    return (
+        <canvas 
+            ref={canvasRef} 
+            className="fixed inset-0 pointer-events-none z-[5]" 
+            style={{ mixBlendMode: 'screen' }}
+        />
+    );
+}

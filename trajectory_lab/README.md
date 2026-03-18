@@ -6,42 +6,41 @@
 
 ```
 trajectory_lab/
-├── core/
-│   ├── geo_utils.py      # 地理工具（haversine、插值）
-│   ├── no_fly_zones.py   # 禁飞区数据结构与格网索引
-│   ├── poi_loader.py     # POI 加载 + 净化（过滤被禁飞区覆盖的 demand）
-│   └── planner.py        # 轨迹规划接口（当前：安全且高速的 A* v4，带错落高度）
-├── batch_generate.py     # 批量随机生成
-├── single_generate.py    # 指定两点生成单条
-└── server.py             # Flask REST API
+├── core/             # 核心算法逻辑
+├── models/           # 模型文件 (pkl)
+├── scripts/          # 入口脚本
+│   ├── batch_generate.py
+│   ├── single_generate.py
+│   ├── generate_energy.py
+│   └── server.py
+└── tests/            # 测试脚本
 ```
 
 ## 快速上手
 
 ### 1. 安装依赖
 ```bash
-pip install flask flask-cors
+pip install flask flask-cors pandas scikit-learn joblib
 ```
 
 ### 2. 批量生成轨迹（直接写入前端）
 ```bash
-python trajectory_lab/batch_generate.py --city shenzhen --n 2000 #对于深圳市，这个数字应该是2000，可以保证在每个时刻都有500条轨迹
+python trajectory_lab/scripts/batch_generate.py --city shenzhen --n 2000
 ```
 
 ### 3. 指定两点生成单条轨迹
 ```bash
 # 通过 POI ID
-python trajectory_lab/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
+python trajectory_lab/scripts/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
 
 # 通过经纬度
-python trajectory_lab/single_generate.py --city shenzhen \
+python trajectory_lab/scripts/single_generate.py --city shenzhen \
   --from-latlon 22.53,113.93 --to-latlon 22.55,113.95
 ```
 
 ### 4. 启动 API 服务（供前端调试面板调用）
 ```bash
-python trajectory_lab/server.py
-# 默认监听 http://127.0.0.1:5001
+python trajectory_lab/scripts/server.py
 ```
 
 ### 5. 启动前端

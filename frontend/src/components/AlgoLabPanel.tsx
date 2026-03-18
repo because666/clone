@@ -22,6 +22,7 @@ interface AlgoLabPanelProps {
     pickedTo: { lat: number; lon: number; id: string; name: string } | null;
     onClearPick: () => void;
     onToggle?: (open: boolean) => void;
+    isOpen?: boolean;
 }
 
 interface GenResult {
@@ -45,16 +46,8 @@ export default function AlgoLabPanel({
     pickedTo,
     onClearPick,
     onToggle,
+    isOpen = false,
 }: AlgoLabPanelProps) {
-    const [isOpen, setIsOpen] = useState(false);
-
-    const handleToggle = () => {
-        setIsOpen(v => {
-            const next = !v;
-            onToggle?.(next);
-            return next;
-        });
-    };
     const [batchN, setBatchN] = useState(30);
     const [batchSeed, setBatchSeed] = useState(42);
     const [minDist, setMinDist] = useState(400);
@@ -138,23 +131,7 @@ export default function AlgoLabPanel({
     // ─── UI ────────────────────────────────────────────────────────────────
     return (
         <>
-            {/* 浮动触发按钮 */}
-            <button
-                id="algo-lab-toggle"
-                onClick={handleToggle}
-                className={`absolute top-1/2 -translate-y-1/2 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${isOpen ? 'right-[380px] opacity-0 pointer-events-none' : 'right-4 opacity-100 hover:scale-110'}`}
-                style={{
-                    background: 'rgba(255,255,255,0.7)',
-                    backdropFilter: 'blur(12px)',
-                    border: '1.5px solid rgba(255,255,255,0.6)',
-                    color: '#4f46e5',
-                }}
-                title="算法调试面板"
-            >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-            </button>
+            {/* 抽屉面板由外部组件触发显示 */}
 
             {/* 抽屉面板 */}
             {isOpen && (
@@ -170,7 +147,7 @@ export default function AlgoLabPanel({
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-indigo-600 font-mono font-bold mr-1">{city}</span>
-                            <button onClick={() => { setIsOpen(false); onToggle?.(false); }} className="text-slate-400 hover:text-slate-700 transition-colors bg-white/50 p-1 rounded-full hover:bg-white/80">
+                            <button onClick={() => onToggle?.(false)} className="text-slate-400 hover:text-slate-700 transition-colors bg-white/50 p-1 rounded-full hover:bg-white/80">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                                 </svg>

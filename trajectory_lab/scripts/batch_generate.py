@@ -2,7 +2,7 @@
 batch_generate.py — 批量随机生成飞行轨迹 (多进程加速)
 
 用法:
-    python trajectory_lab/batch_generate.py --city shenzhen --n 2000
+    python trajectory_lab/scripts/batch_generate.py --city shenzhen --n 2000
 
 功能:
   1. 加载城市 POI，过滤被禁飞区覆盖的 demand
@@ -19,7 +19,8 @@ import time
 import multiprocessing as mp
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# 脚本移动到 scripts/ 后，ROOT 需要向上三级才能到达项目根目录
+ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from trajectory_lab.core.poi_loader import load_city_pois, report_blocked

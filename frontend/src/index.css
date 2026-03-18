@@ -17,3 +17,37 @@ body {
   width: 100vw;
   height: 100vh;
 }
+
+/* 告警 Toast 滑入动画 */
+@keyframes alertSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(80px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 风速滑块 Thumb 样式 */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.5);
+  border: 2px solid white;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.5);
+  border: 2px solid white;
+}
