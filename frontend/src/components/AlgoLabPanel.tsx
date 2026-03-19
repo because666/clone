@@ -160,7 +160,7 @@ export default function AlgoLabPanel({
                         <div className="mx-4 mt-3 px-3 py-2 rounded-lg text-xs text-amber-300 font-mono"
                             style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)' }}>
                             ⚠ Flask 服务未启动<br />
-                            <span className="opacity-70">python trajectory_lab/server.py</span>
+                            <span className="opacity-70">python trajectory_lab/scripts/server.py</span>
                         </div>
                     )}
 

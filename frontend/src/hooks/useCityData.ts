@@ -81,19 +81,20 @@ async function runWithConcurrency(
     maxConcurrent: number
 ): Promise<DataTaskResult[]> {
     const results: DataTaskResult[] = new Array(tasks.length);
-    const executing: Promise<void>[] = [];
+    const executing: Set<Promise<void>> = new Set();
 
     for (let i = 0; i < tasks.length; i++) {
         const task = tasks[i];
-        const promise = task().then(result => {
+        const promise = (async () => {
+            const result = await task();
             results[i] = result;
-        });
+        })();
 
-        executing.push(promise);
+        executing.add(promise);
+        promise.then(() => executing.delete(promise));
 
-        if (executing.length >= maxConcurrent) {
+        if (executing.size >= maxConcurrent) {
             await Promise.race(executing);
-            executing.splice(executing.findIndex(p => p === promise), 1);
         }
     }
 
