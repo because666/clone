@@ -215,12 +215,13 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         return layers;
     }, [buildingsLayer, poiDemandLayer, poiSensitiveLayer]);
 
-    const activeUAVs = useMemo(() => uavModelBuffer.filter(u => u.isActive), [uavModelBuffer]);
+    // 实时读取最新的 mutable buffer，不缓存，避免暂停触发 React 重绘时拿到初始的空数组
+    const activeUAVs = uavModelBuffer.filter(u => u.isActive);
 
     const uavModelLayer = useMemo(() => {
         return new ScenegraphLayer({
             id: 'uav-model-layer',
-            data: activeUAVs,
+            data: [] as any[], // 基础层不绑定数据，在实际使用时 clone 注入
             scenegraph: '/dji_spark.glb',
             getPosition: (d: any) => d.position,
             getOrientation: (d: any) => d.orientation,
@@ -245,7 +246,7 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                 }
             }
         });
-    }, [activeUAVs, viewState.zoom]);
+    }, [viewState.zoom]);
 
     const activeTailLayer = useMemo(() => {
         const activeTails = uavModelBuffer.filter(u => u.isActive && u.tailPath && u.tailPath.length > 1);

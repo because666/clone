@@ -61,7 +61,7 @@ def train_model():
 
 def predict_energy_for_trajectories(model, city='shenzhen'):
     traj_path = ROOT / 'frontend' / 'public' / 'data' / 'processed' / 'trajectories' / f'{city}_uav_trajectories.json'
-    out_path = ROOT / 'data' / 'processed' / f'{city}_energy_predictions.json'
+    out_path = ROOT / 'frontend' / 'public' / 'data' / 'processed' / f'{city}_energy_predictions.json'
     
     print(f"Loading trajectories from {traj_path}...")
     with open(traj_path, 'r', encoding='utf-8') as f:
@@ -155,6 +155,11 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
     print("Done!")
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--city", default="shenzhen", help="City name or multiple cities separated by comma")
+    args = parser.parse_args()
+
     model_path = ROOT / 'trajectory_lab' / 'models' / 'energy_rf_model.pkl'
     if model_path.exists():
         print("Loading existing model...")
@@ -162,4 +167,7 @@ if __name__ == "__main__":
     else:
         model = train_model()
         
-    predict_energy_for_trajectories(model, city='shenzhen')
+    for city in args.city.split(","):
+        c = city.strip()
+        if c:
+            predict_energy_for_trajectories(model, city=c)
