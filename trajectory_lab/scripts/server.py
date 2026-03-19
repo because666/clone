@@ -103,7 +103,7 @@ def get_pois():
 def batch_generate():
     body = request.get_json(force=True, silent=True) or {}
     city     = body.get("city", "shenzhen")
-    n        = int(body.get("n", 50))
+    n        = int(body.get("n", 1000))
     min_dist = float(body.get("min_dist", 400))
     max_dist = float(body.get("max_dist", 8000))
     seed     = int(body.get("seed", 42))

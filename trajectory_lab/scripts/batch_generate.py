@@ -119,7 +119,7 @@ def build_output(trajectories_results, city: str, target_concurrency: int = 500,
 def main():
     parser = argparse.ArgumentParser(description="批量生成无人机飞行轨迹")
     parser.add_argument("--city", default="shenzhen", help="目标城市（默认 shenzhen）")
-    parser.add_argument("--n", type=int, default=50, help="生成轨迹条数（默认 50）")
+    parser.add_argument("--n", type=int, default=1000, help="生成轨迹条数（默认 1000）")
     parser.add_argument("--min-dist", type=float, default=400.0, help="最短飞行距离（米，默认 400）")
     parser.add_argument("--max-dist", type=float, default=8000.0, help="最长飞行距离（米，默认 8000）")
     parser.add_argument("--seed", type=int, default=42, help="随机种子（默认 42）")

@@ -48,7 +48,7 @@ export default function AlgoLabPanel({
     onToggle,
     isOpen = false,
 }: AlgoLabPanelProps) {
-    const [batchN, setBatchN] = useState(30);
+    const [batchN, setBatchN] = useState(1000);
     const [batchSeed, setBatchSeed] = useState(42);
     const [minDist, setMinDist] = useState(400);
     const [maxDist, setMaxDist] = useState(8000);
