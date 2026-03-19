@@ -16,10 +16,11 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
-    from flask import Flask, request, jsonify
+    from flask import Flask, request, jsonify, send_from_directory
     from flask_cors import CORS
+    from flask_compress import Compress
 except ImportError:
-    print("缺少依赖，请运行: pip install flask flask-cors")
+    print("缺少依赖，请运行: pip install flask flask-cors flask-compress")
     sys.exit(1)
 
 from trajectory_lab.core.poi_loader import load_city_pois
@@ -36,6 +37,11 @@ logger = logging.getLogger("TrajServer")
 
 app = Flask(__name__)
 CORS(app)  # 允许前端跨域访问
+Compress(app)  # 启用 GZIP 压缩
+
+# 静态文件路径配置
+FRONTEND_DIST = ROOT / "frontend" / "dist"
+DATA_DIR = ROOT / "data"
 
 OUTPUT_BASE = ROOT / "frontend" / "public" / "data" / "processed" / "trajectories"
 
@@ -250,6 +256,34 @@ def single_generate():
         "nfz_violations": result.nfz_violations,
         "elapsed_s": round(elapsed, 3),
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 静态文件服务 (用于生产环境)
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route("/")
+def serve_index():
+    """服务前端主页"""
+    return send_from_directory(str(FRONTEND_DIST), "index.html")
+
+
+@app.route("/<path:path>")
+def serve_static(path):
+    """服务前端静态资源和数据文件"""
+    # 1. 优先检查 frontend/dist (assets, favicon 等)
+    if (FRONTEND_DIST / path).exists():
+        return send_from_directory(str(FRONTEND_DIST), path)
+
+    # 2. 检查 data 目录 (processed GeoJSON 等)
+    if path.startswith("data/") and (ROOT / path).exists():
+        return send_from_directory(str(ROOT), path)
+
+    # 3. 如果都不匹配且不是 API 请求，返回 index.html (支持 SPA 路由)
+    if not path.startswith("api/"):
+        return send_from_directory(str(FRONTEND_DIST), "index.html")
+
+    return jsonify({"error": "Not Found"}), 404
 
 
 if __name__ == "__main__":

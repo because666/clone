@@ -221,7 +221,6 @@ export function useCityData(): UseCityDataReturn {
         setLoadingSteps(loadingStepsRef.current);
 
         const basePath = `/data/processed/${city}`;
-        const cacheBuster = `?t=${Date.now()}`;
 
         try {
             // 定义所有数据加载任务
@@ -230,7 +229,7 @@ export function useCityData(): UseCityDataReturn {
                 async () => {
                     try {
                         const data = await fetchWithRetry<any>(
-                            `${basePath}/buildings_3d.geojson${cacheBuster}`,
+                            `${basePath}/buildings_3d.geojson`,
                             'buildings',
                             signal
                         );
@@ -244,7 +243,7 @@ export function useCityData(): UseCityDataReturn {
                 async () => {
                     try {
                         const data = await fetchWithRetry<any>(
-                            `${basePath}/poi_demand.geojson${cacheBuster}`,
+                            `${basePath}/poi_demand.geojson`,
                             'poi_demand',
                             signal
                         );
@@ -258,7 +257,7 @@ export function useCityData(): UseCityDataReturn {
                 async () => {
                     try {
                         const data = await fetchWithRetry<any>(
-                            `${basePath}/poi_sensitive.geojson${cacheBuster}`,
+                            `${basePath}/poi_sensitive.geojson`,
                             'poi_sensitive',
                             signal
                         );
@@ -275,7 +274,7 @@ export function useCityData(): UseCityDataReturn {
                             trajectories: UAVPath[];
                             timeRange: { min: number; max: number };
                         }>(
-                            `/data/processed/trajectories/${city}_uav_trajectories.json${cacheBuster}`,
+                            `/data/processed/trajectories/${city}_uav_trajectories.json`,
                             'trajectories',
                             signal
                         );
@@ -289,7 +288,7 @@ export function useCityData(): UseCityDataReturn {
                 async () => {
                     try {
                         const data = await fetchWithRetry<any>(
-                            `/data/processed/${city}_energy_predictions.json${cacheBuster}`,
+                            `/data/processed/${city}_energy_predictions.json`,
                             'energy',
                             signal
                         );
@@ -371,9 +370,8 @@ export function useCityData(): UseCityDataReturn {
      */
     const reloadCurrentTrajectories = useCallback(async () => {
         const city = currentCityRef.current;
-        const cacheBuster = `?t=${Date.now()}`;
         try {
-            const tRes = await fetch(`/data/processed/trajectories/${city}_uav_trajectories.json${cacheBuster}`)
+            const tRes = await fetch(`/data/processed/trajectories/${city}_uav_trajectories.json`)
                 .then(r => r.ok ? r.json() : null).catch(() => null);
             if (tRes) {
                 const newTrajs = tRes.trajectories || [];
