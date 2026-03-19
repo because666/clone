@@ -25,7 +25,6 @@ export function updateActiveUAVsBuffer(trajectories: UAVPath[], currentGlobalTim
             position: [0, 0, -1000] as [number, number, number],
             orientation: [0, 0, 90] as [number, number, number],
             trajectory: null as any,
-            tailPath: [] as [number, number, number][],
             isActive: false
         });
     }
@@ -107,20 +106,7 @@ export function updateActiveUAVsBuffer(trajectories: UAVPath[], currentGlobalTim
             cell.trajectory = traj;
             cell.isActive = true;
 
-            let tailPoints: [number, number, number][] = [];
-            let tailTimestamps: number[] = [];
-            const trueElapsedT = t0_absolute + boundedLocalT;
-            const lookback = Math.max(0, segIdx - 50);
 
-            for (let j = lookback; j <= segIdx; j++) {
-                tailPoints.push(path[j]);
-                tailTimestamps.push(currentGlobalTime - (trueElapsedT - times[j]));
-            }
-            tailPoints.push([cell.position[0], cell.position[1], cell.position[2]]);
-            tailTimestamps.push(currentGlobalTime - (trueElapsedT - expectedT));
-
-            cell.tailPath = tailPoints;
-            cell.tailTimestamps = tailTimestamps;
 
             activeCount++;
         }

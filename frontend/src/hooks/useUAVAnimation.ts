@@ -14,15 +14,14 @@ const NFZ_RADIUS: Record<string, number> = {
 };
 const DEFAULT_NFZ_RADIUS = 200;
 
-/** Haversine 两点距离（米），快速近似 */
-function haversineDist(lon1: number, lat1: number, lon2: number, lat2: number): number {
+/** 极速坐标系两点距离平方估算（米^2），免除三角/开方等高昂运算 */
+function fastDistSq(lon1: number, lat1: number, lon2: number, lat2: number): number {
     const R = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const x = (lon2 - lon1) * Math.PI / 180 * Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
+    const y = (lat2 - lat1) * Math.PI / 180;
+    const dx = R * x;
+    const dy = R * y;
+    return dx * dx + dy * dy;
 }
 
 /** 风速影响因子 */
@@ -139,10 +138,17 @@ export function useUAVAnimation(
             // ① 低电量检测
             if (ed?.battery && ed.battery.length > 0) {
                 const timestamps = uav.trajectory.timestamps;
-                let idx = 0;
-                for (let j = 0; j < timestamps.length; j++) {
-                    if (timestamps[j] >= currentTime) { idx = j; break; }
-                    idx = j;
+                let left = 0;
+                let right = timestamps.length - 1;
+                let idx = right;
+                while (left <= right) {
+                    const mid = (left + right) >> 1;
+                    if (timestamps[mid] >= currentTime) {
+                        idx = mid;
+                        right = mid - 1;
+                    } else {
+                        left = mid + 1;
+                    }
                 }
                 const startBat = ed.battery[0];
                 const rawBat = ed.battery[idx];
@@ -165,9 +171,10 @@ export function useUAVAnimation(
                     const [poiLon, poiLat] = coords;
                     const category = poi.properties?.category || '';
                     const radius = NFZ_RADIUS[category] || DEFAULT_NFZ_RADIUS;
-                    const dist = haversineDist(uavLon, uavLat, poiLon, poiLat);
-                    if (dist < radius) {
+                    const distSq = fastDistSq(uavLon, uavLat, poiLon, poiLat);
+                    if (distSq < radius * radius) {
                         const poiName = poi.properties?.name || category;
+                        const dist = Math.sqrt(distSq); // 仅触发时才花性能算真实距离
                         pushAlert(
                             'danger-zone',
                             flightId,
@@ -198,9 +205,7 @@ export function useUAVAnimation(
             const currentLayers = deck.props.layers;
             const updatedLayers = currentLayers.map((layer: any) => {
                 if (layer?.id === 'uav-active-tail-layer') {
-                    const activeTails = uavModelBuffer.filter(u => u.isActive && u.tailPath && u.tailPath.length > 1);
                     return layer.clone({
-                        data: activeTails,
                         currentTime: next
                     });
                 }
@@ -268,9 +273,7 @@ export function useUAVAnimation(
             const currentLayers = deck.props.layers || [];
             const updatedLayers = currentLayers.map((layer: any) => {
                 if (layer?.id === 'uav-active-tail-layer') {
-                    const activeTails = uavModelBuffer.filter(u => u.isActive && u.tailPath && u.tailPath.length > 1);
                     return layer.clone({
-                        data: activeTails,
                         currentTime: currentTimeRef.current
                     });
                 }

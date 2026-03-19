@@ -43,7 +43,7 @@ const DEFAULT_STEPS: StepItem[] = [
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
-const MAX_CONCURRENT = 3; // 最大并发数
+const MAX_CONCURRENT = 10; // 极大提升并发数，发挥 HTTP/2 多路复用性能
 
 /**
  * 数据任务返回类型

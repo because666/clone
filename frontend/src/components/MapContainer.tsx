@@ -249,15 +249,15 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
     }, [viewState.zoom]);
 
     const activeTailLayer = useMemo(() => {
-        const activeTails = uavModelBuffer.filter(u => u.isActive && u.tailPath && u.tailPath.length > 1);
         return new TripsLayer({
             id: 'uav-active-tail-layer',
-            data: activeTails,
-            getPath: (d: any) => d.tailPath,
-            getTimestamps: (d: any) => d.tailTimestamps,
+            data: trajectories,
+            getPath: (d: any) => d.path,
+            getTimestamps: (d: any) => d.timestamps,
             getColor: (d: any) => {
-                if (d.trajectory && energyData && energyData[d.trajectory.id]) {
-                    const payload = energyData[d.trajectory.id].payload;
+                const realId = d.id ? d.id.replace('_ghost', '') : '';
+                if (realId && energyData && energyData[realId]) {
+                    const payload = energyData[realId].payload;
                     if (payload >= 2.0) return [245, 158, 11];
                     if (payload >= 1.0) return [16, 185, 129];
                     return [14, 165, 233];
@@ -271,11 +271,10 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             opacity: 0.9,
             pickable: true,
             updateTriggers: {
-                getTimestamps: [currentTimeRef.current, isPlaying],
                 getColor: energyData
             }
         });
-    }, [energyData, isPlaying, currentTimeRef.current, uavModelBuffer]);
+    }, [trajectories, energyData]);
 
     const hoverPathLayer = useMemo(() => {
         let pathData: any[] = [];
