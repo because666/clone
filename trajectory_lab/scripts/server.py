@@ -48,6 +48,9 @@ OUTPUT_BASE = ROOT / "frontend" / "public" / "data" / "processed" / "trajectorie
 # ── 城市 POI 缓存（按需加载，避免每次请求都重新读 GeoJSON）───────────
 _POI_CACHE: dict = {}
 
+# 预加载的城市列表（启动时加载，减少首次请求延迟）
+PRELOAD_CITIES = ["shenzhen"]
+
 
 def get_city_pois(city: str, buffer_m: float = 0.0):
     """从缓存获取城市 POI，不存在则加载"""
@@ -56,6 +59,20 @@ def get_city_pois(city: str, buffer_m: float = 0.0):
         logger.info(f"加载城市 POI: {city} (buffer={buffer_m}m)")
         _POI_CACHE[key] = load_city_pois(city, buffer_m=buffer_m)
     return _POI_CACHE[key]
+
+
+def preload_cities():
+    """预加载常用城市数据，减少首次请求延迟"""
+    logger.info(f"预加载城市数据: {PRELOAD_CITIES}")
+    for city in PRELOAD_CITIES:
+        try:
+            get_city_pois(city)
+        except Exception as e:
+            logger.warning(f"预加载 {city} 失败: {e}")
+
+
+# 在模块导入时预加载（支持 gunicorn 等生产环境）
+preload_cities()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -292,4 +309,5 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
     logger.info(f"轨迹算法服务启动于 http://{args.host}:{args.port}")
+    preload_cities()
     app.run(host=args.host, port=args.port, debug=False)
