@@ -28,7 +28,7 @@ interface UseCityDataReturn {
     currentTimeRef: React.MutableRefObject<number>;
     currentCityRef: React.MutableRefObject<string>;
     loadCityData: (city: string, onFlightClear?: () => void) => Promise<void>;
-    reloadCurrentTrajectories: () => Promise<void>;
+    reloadCurrentTrajectories: () => Promise<UAVPath[]>;
     setTrajectories: React.Dispatch<React.SetStateAction<UAVPath[]>>;
     clearError: () => void;
 }
@@ -368,7 +368,7 @@ export function useCityData(): UseCityDataReturn {
     /**
      * 重新加载当前城市的轨迹数据
      */
-    const reloadCurrentTrajectories = useCallback(async () => {
+    const reloadCurrentTrajectories = useCallback(async (): Promise<UAVPath[]> => {
         const city = currentCityRef.current;
         try {
             const tRes = await fetch(`/data/processed/trajectories/${city}_uav_trajectories.json`)
@@ -383,10 +383,12 @@ export function useCityData(): UseCityDataReturn {
                     cached.trajectories = newTrajs;
                     cached.timeRange = tRes.timeRange || { min: 0, max: 0 };
                 }
+                return newTrajs;
             }
         } catch (e) {
             console.error('热重载轨迹失败', e);
         }
+        return [];
     }, []);
 
     return {

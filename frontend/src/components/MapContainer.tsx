@@ -39,6 +39,13 @@ export default function MapContainer() {
     } = useCityData();
 
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
+    const [toastState, setToastState] = useState<{msg: string, type: 'info'|'success'|'error'|'loading'} | null>(null);
+
+    const showToast = useCallback((msg: string, type: 'info'|'success'|'error'|'loading' = 'info') => {
+        setToastState({msg, type});
+        setTimeout(() => setToastState(null), type === 'error' ? 5000 : 3000);
+    }, []);
+
     // 两点选取状态：点击第一个 demand POI 选起点，点击第二个自动生成轨迹
     const pickedFromRef = useRef<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [pickedFromDisplay, setPickedFromDisplay] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
@@ -102,11 +109,23 @@ export default function MapContainer() {
             // 第一次点击：选起点
             pickedFromRef.current = picked;
             setPickedFromDisplay(picked);
+            showToast(`已选择起点：${picked.name || picked.id}，请点击另一个点作为终点`, 'info');
         } else {
             // 第二次点击：选终点，自动调用 API 生成轨迹
             const from = pickedFromRef.current;
+            
+            // 如果点击同一个点，则取消选择
+            if (from.id === picked.id) {
+                pickedFromRef.current = null;
+                setPickedFromDisplay(null);
+                showToast(`已取消选择`, 'info');
+                return;
+            }
+
             pickedFromRef.current = null;
             setPickedFromDisplay(null);
+            
+            showToast(`正在生成到 ${picked.name || picked.id} 的轨迹...`, 'loading');
 
             // 异步调用 single API 生成轨迹
             fetch('/api/single', {
@@ -116,18 +135,40 @@ export default function MapContainer() {
                     city: currentCity,
                     from_lat: from.lat, from_lon: from.lon, from_id: from.id,
                     to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id,
-                    append: false,
+                    append: true,
                 }),
             })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.ok) {
-                        setTimeout(reloadCurrentTrajectories, 300);
+                .then(async r => {
+                    const text = await r.text();
+                    try {
+                        const data = JSON.parse(text);
+                        return { data };
+                    } catch (err) {
+                        if (r.status === 504 || r.status === 502) {
+                            throw new Error("后台算法服务未启动 (网关超时)，请确保运行了 python server.py");
+                        }
+                        throw new Error(`非预期的服务器响应 (状态码 ${r.status})`);
                     }
                 })
-                .catch(() => { /* 静默失败 */ });
+                .then(async ({ data }) => {
+                    if (data.ok || data.status === 'success') {
+                        showToast(`轨迹生成成功！`, 'success');
+                        const newTrajs = await reloadCurrentTrajectories();
+                        if (newTrajs && data.flight_id) {
+                            const newFlight = newTrajs.find((t: any) => t.id === data.flight_id);
+                            if (newFlight) {
+                                setSelectedFlight(newFlight);
+                            }
+                        }
+                    } else {
+                        showToast(`生成失败：${data.error || data.message || '未知错误'}`, 'error');
+                    }
+                })
+                .catch((e) => { 
+                    showToast(`请求失败：${e.message}`, 'error');
+                });
         }
-    }, [currentCity, reloadCurrentTrajectories]);
+    }, [currentCity, reloadCurrentTrajectories, showToast]);
 
     const handleMapLoad = useCallback(() => {
         const map = mapRef.current?.getMap();
@@ -195,6 +236,9 @@ export default function MapContainer() {
             onClick: handleDemandPick,
             onHover: (info: any) => setHoverInfo(info),
             cursor: 'pointer',
+            updateTriggers: {
+                getFillColor: [pickedFromDisplay?.id]
+            }
         } as any);
     }, [poiDemand, pickedFromDisplay, handleDemandPick]);
 
@@ -422,6 +466,18 @@ export default function MapContainer() {
                 <div className="absolute top-4 left-4 bg-white/80 backdrop-blur text-slate-700 text-xs px-3 py-1.5 rounded-lg shadow border border-slate-200 z-10 pointer-events-none">
                     💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
                 </div>
+
+                {toastState && (
+                    <div className="fixed inset-0 flex items-center justify-center z-[100] pointer-events-none transition-all duration-300">
+                        <div className="bg-slate-900/95 text-white px-8 py-5 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] border border-slate-700 backdrop-blur-lg flex items-center gap-4 transition-transform scale-100">
+                            {toastState.type === 'info' && <span className="text-3xl drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]">🎯</span>}
+                            {toastState.type === 'success' && <span className="text-3xl drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]">✨</span>}
+                            {toastState.type === 'error' && <span className="text-3xl drop-shadow-[0_0_10px_rgba(248,113,113,0.8)]">❌</span>}
+                            {toastState.type === 'loading' && <span className="text-3xl flex items-center justify-center w-8 h-8"><div className="w-6 h-6 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div></span>}
+                            <span className="text-xl font-bold tracking-wide drop-shadow-md">{toastState.msg}</span>
+                        </div>
+                    </div>
+                )}
 
                 <PlaybackControls
                     isPlaying={isPlaying}
