@@ -177,6 +177,12 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
 
     const poiSensitiveLayer = useMemo(() => {
         if (!sensitivePoints.length) return null;
+        // 基于 Zoom 计算平滑过渡因子 (10.5 远景 -> 13.5 近景)
+        const z = viewState.zoom || 11;
+        const t = Math.max(0, Math.min(1, (z - 10.5) / 3.0));
+        const fillAlpha = Math.round(t * 25);
+        const lineAlpha = Math.round(t * 200);
+
         return new ColumnLayer({
             id: 'poi-sensitive-point-layer',
             data: sensitivePoints,
@@ -197,14 +203,14 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             },
             pickable: true,
             elevationScale: 1,
-            wireframe: true,
-            getLineWidth: 2,
+            wireframe: z > 11.5,
+            getLineWidth: z > 11.5 ? 2 : 0,
             getPosition: (d: any) => d.geometry.coordinates,
-            getFillColor: [255, 60, 60, 25],
-            getLineColor: [255, 80, 80, 200],
+            getFillColor: [255, 60, 60, fillAlpha],
+            getLineColor: [255, 80, 80, lineAlpha],
             getElevation: 400,
         });
-    }, [sensitivePoints]);
+    }, [sensitivePoints, viewState.zoom]);
 
     // 组合静态图层（渐进式渲染）
     const staticLayers = useMemo(() => {
@@ -249,6 +255,12 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
     }, [viewState.zoom]);
 
     const activeTailLayer = useMemo(() => {
+        // 轨迹平滑衰减处理
+        const z = viewState.zoom || 11;
+        const t = Math.max(0, Math.min(1, (z - 10.5) / 3.0));
+        const widthMinPx = 0.5 + t * 2.0;    // 0.5px -> 2.5px
+        const layerOpacity = 0.4 + t * 0.5;  // 0.4 -> 0.9
+
         return new TripsLayer({
             id: 'uav-active-tail-layer',
             data: trajectories,
@@ -264,17 +276,17 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                 }
                 return [14, 165, 233];
             },
-            widthMinPixels: 2.5,
+            widthMinPixels: widthMinPx,
             trailLength: 100,
             currentTime: currentTimeRef.current,
             shadowEnabled: false,
-            opacity: 0.9,
+            opacity: layerOpacity,
             pickable: true,
             updateTriggers: {
                 getColor: energyData
             }
         });
-    }, [trajectories, energyData]);
+    }, [trajectories, energyData, viewState.zoom]);
 
     const hoverPathLayer = useMemo(() => {
         let pathData: any[] = [];
