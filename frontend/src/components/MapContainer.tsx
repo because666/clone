@@ -39,10 +39,10 @@ export default function MapContainer() {
     } = useCityData();
 
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
-    const [toastState, setToastState] = useState<{msg: string, type: 'info'|'success'|'error'|'loading'} | null>(null);
+    const [toastState, setToastState] = useState<{ msg: string, type: 'info' | 'success' | 'error' | 'loading' } | null>(null);
 
-    const showToast = useCallback((msg: string, type: 'info'|'success'|'error'|'loading' = 'info') => {
-        setToastState({msg, type});
+    const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'loading' = 'info') => {
+        setToastState({ msg, type });
         setTimeout(() => setToastState(null), type === 'error' ? 5000 : 3000);
     }, []);
 
@@ -113,7 +113,7 @@ export default function MapContainer() {
         } else {
             // 第二次点击：选终点，自动调用 API 生成轨迹
             const from = pickedFromRef.current;
-            
+
             // 如果点击同一个点，则取消选择
             if (from.id === picked.id) {
                 pickedFromRef.current = null;
@@ -124,7 +124,7 @@ export default function MapContainer() {
 
             pickedFromRef.current = null;
             setPickedFromDisplay(null);
-            
+
             showToast(`正在生成到 ${picked.name || picked.id} 的轨迹...`, 'loading');
 
             // 异步调用 single API 生成轨迹
@@ -164,7 +164,7 @@ export default function MapContainer() {
                         showToast(`生成失败：${data.error || data.message || '未知错误'}`, 'error');
                     }
                 })
-                .catch((e) => { 
+                .catch((e) => {
                     showToast(`请求失败：${e.message}`, 'error');
                 });
         }
@@ -222,12 +222,13 @@ export default function MapContainer() {
             stroked: true,
             filled: true,
             lineWidthMinPixels: 1,
-            getPointRadius: 25,
+            // 放大基础半径到45米，使其在3D空间中成为包围大楼的“发光底座”
+            getPointRadius: 45,
             pointRadiusMinPixels: 4,
-            pointRadiusMaxPixels: 16,
+            // 删除了 pointRadiusMaxPixels 限制，让光圈可以随视角放大而正常占据视野，绝不会再在近距离缩成找不到的小点
             getFillColor: (d: any) => {
                 if (pickedFromDisplay && d.properties?.poi_id === pickedFromDisplay.id) return [52, 255, 100, 255];
-                return [52, 211, 153, 160];
+                return [52, 211, 153, 140]; // 略微透明，更好融合地面
             },
             getLineColor: [5, 150, 105, 220],
             pickable: true,
@@ -236,6 +237,7 @@ export default function MapContainer() {
             onClick: handleDemandPick,
             onHover: (info: any) => setHoverInfo(info),
             cursor: 'pointer',
+            // 移除 depthTest: false，恢复真实的 3D 物理遮挡，保留最优雅的空间层次感
             updateTriggers: {
                 getFillColor: [pickedFromDisplay?.id]
             }
@@ -467,14 +469,19 @@ export default function MapContainer() {
                     💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
                 </div>
 
+                {/* 毛玻璃风格的灵动胶囊提示条，不再遮挡视线 */}
                 {toastState && (
-                    <div className="fixed inset-0 flex items-center justify-center z-[100] pointer-events-none transition-all duration-300">
-                        <div className="bg-slate-900/95 text-white px-8 py-5 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] border border-slate-700 backdrop-blur-lg flex items-center gap-4 transition-transform scale-100">
-                            {toastState.type === 'info' && <span className="text-3xl drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]">🎯</span>}
-                            {toastState.type === 'success' && <span className="text-3xl drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]">✨</span>}
-                            {toastState.type === 'error' && <span className="text-3xl drop-shadow-[0_0_10px_rgba(248,113,113,0.8)]">❌</span>}
-                            {toastState.type === 'loading' && <span className="text-3xl flex items-center justify-center w-8 h-8"><div className="w-6 h-6 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div></span>}
-                            <span className="text-xl font-bold tracking-wide drop-shadow-md">{toastState.msg}</span>
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+                        <div className="bg-slate-900/60 text-white px-6 py-2.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-white/10 backdrop-blur-md flex items-center space-x-3">
+                            {toastState.type === 'info' && <span className="text-lg">🎯</span>}
+                            {toastState.type === 'success' && <span className="text-lg drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">✨</span>}
+                            {toastState.type === 'error' && <span className="text-lg drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]">❌</span>}
+                            {toastState.type === 'loading' && (
+                                <span className="flex items-center justify-center w-5 h-5">
+                                    <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                                </span>
+                            )}
+                            <span className="text-sm font-medium tracking-wide whitespace-nowrap">{toastState.msg}</span>
                         </div>
                     </div>
                 )}

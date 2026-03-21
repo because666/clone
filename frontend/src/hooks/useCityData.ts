@@ -377,7 +377,7 @@ export function useCityData(): UseCityDataReturn {
                 const newTrajs = tRes.trajectories || [];
                 setTrajectories(newTrajs);
                 timeRangeRef.current = tRes.timeRange || { min: 0, max: 0 };
-                currentTimeRef.current = 0;
+                // 移除 currentTimeRef.current = 0，从而不再打断其他处于飞行中状态的无人机！
                 const cached = dataCacheRef.current.get(city);
                 if (cached) {
                     cached.trajectories = newTrajs;
