@@ -1,15 +1,10 @@
 import { Activity, Package, Navigation } from 'lucide-react';
 import RightControlPanel from './RightControlPanel';
 
-interface DashboardOverlayProps {
-    hideRightPanels?: boolean;
-    onOpenAlgoLab: () => void;
-}
-
-export default function DashboardOverlay({ hideRightPanels = false, onOpenAlgoLab }: DashboardOverlayProps) {
+export default function DashboardOverlay() {
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 p-6 font-sans">
-            <RightControlPanel hide={hideRightPanels} onOpenAlgoLab={onOpenAlgoLab} />
+            <RightControlPanel />
 
             {/* Left Bottom Panel */}
             <div className="absolute bottom-10 left-6 pointer-events-auto bg-white/40 backdrop-blur-2xl border border-white/50 px-7 py-6 rounded-[2rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] min-w-[360px] flex flex-col gap-6 overflow-hidden">
@@ -64,5 +59,3 @@ export default function DashboardOverlay({ hideRightPanels = false, onOpenAlgoLa
         </div>
     );
 }
-
-

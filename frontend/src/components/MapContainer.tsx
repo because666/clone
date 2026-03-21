@@ -5,7 +5,6 @@ import { TripsLayer } from '@deck.gl/geo-layers';
 import { Map as MapGL, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
-import AlgoLabPanel from './AlgoLabPanel';
 
 import { INITIAL_VIEW_STATE, CITY_COORDS } from '../constants/map';
 import { useCityData } from '../hooks/useCityData';
@@ -16,13 +15,13 @@ import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
 import WeatherOverlay from './WeatherOverlay';
-import { uavModelBuffer } from '../utils/animation';
+import { getActiveUAVs } from '../utils/animation';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
 import { ErrorAlert } from './ErrorAlert';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MapSkeleton } from './MapSkeleton';
 
-export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = false }: { onRightPanelToggle?: (open: boolean) => void, isRightPanelOpen?: boolean } = {}) {
+export default function MapContainer() {
     const {
         buildingsData,
         poiDemand,
@@ -40,13 +39,16 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
     } = useCityData();
 
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
-    const [pickMode, setPickMode] = useState<'from' | 'to' | null>(null);
-    const [pickedFrom, setPickedFrom] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
-    const [pickedTo, setPickedTo] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
+    // 两点选取状态：点击第一个 demand POI 选起点，点击第二个自动生成轨迹
+    const pickedFromRef = useRef<{ lat: number; lon: number; id: string; name: string } | null>(null);
+    const [pickedFromDisplay, setPickedFromDisplay] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [hoverInfo, setHoverInfo] = useState<any>(null);
     const [currentCity, setCurrentCity] = useState("shenzhen");
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
+
+    // 将 zoom 量化为 0.5 级阶梯，只有跨阶梯时才触发依赖 zoom 的图层重建
+    const quantizedZoom = useMemo(() => Math.round((viewState.zoom || 11) * 2) / 2, [viewState.zoom]);
 
     const mapRef = useRef<MapRef>(null);
     const deckRef = useRef<any>(null);
@@ -88,21 +90,44 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
     }, []);
 
     const handleDemandPick = useCallback((info: any) => {
-        if (!info.object || pickMode === null) return;
+        if (!info.object) return;
         const feat = info.object;
         const coords = feat.geometry?.coordinates;
         if (!coords) return;
         const [lon, lat] = coords;
         const props = feat.properties || {};
         const picked = { lat, lon, id: String(props.poi_id || props.osm_id || ''), name: props.name || '' };
-        if (pickMode === 'from') {
-            setPickedFrom(picked);
-            setPickMode('to');
+
+        if (!pickedFromRef.current) {
+            // 第一次点击：选起点
+            pickedFromRef.current = picked;
+            setPickedFromDisplay(picked);
         } else {
-            setPickedTo(picked);
-            setPickMode(null);
+            // 第二次点击：选终点，自动调用 API 生成轨迹
+            const from = pickedFromRef.current;
+            pickedFromRef.current = null;
+            setPickedFromDisplay(null);
+
+            // 异步调用 single API 生成轨迹
+            fetch('/api/single', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    city: currentCity,
+                    from_lat: from.lat, from_lon: from.lon, from_id: from.id,
+                    to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id,
+                    append: false,
+                }),
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok) {
+                        setTimeout(reloadCurrentTrajectories, 300);
+                    }
+                })
+                .catch(() => { /* 静默失败 */ });
         }
-    }, [pickMode]);
+    }, [currentCity, reloadCurrentTrajectories]);
 
     const handleMapLoad = useCallback(() => {
         const map = mapRef.current?.getMap();
@@ -142,9 +167,8 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             getLineWidth: 1,
             lineWidthMinPixels: 1,
             getElevation: ((d: any) => d.properties.height || 20) as any,
-            pickable: true,
-            autoHighlight: true,
-            highlightColor: [80, 140, 220, 255],
+            pickable: false,
+            autoHighlight: false,
             material: { ambient: 0.4, diffuse: 0.6, shininess: 32, specularColor: [220, 230, 240] },
         });
     }, [buildingsData]);
@@ -161,8 +185,7 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             pointRadiusMinPixels: 4,
             pointRadiusMaxPixels: 16,
             getFillColor: (d: any) => {
-                if (pickedFrom && d.properties?.poi_id === pickedFrom.id) return [52, 255, 100, 255];
-                if (pickedTo && d.properties?.poi_id === pickedTo.id) return [255, 80, 80, 255];
+                if (pickedFromDisplay && d.properties?.poi_id === pickedFromDisplay.id) return [52, 255, 100, 255];
                 return [52, 211, 153, 160];
             },
             getLineColor: [5, 150, 105, 220],
@@ -171,14 +194,14 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             highlightColor: [255, 220, 50, 220],
             onClick: handleDemandPick,
             onHover: (info: any) => setHoverInfo(info),
-            cursor: pickMode !== null ? 'crosshair' : 'pointer',
+            cursor: 'pointer',
         } as any);
-    }, [poiDemand, pickedFrom, pickedTo, pickMode, handleDemandPick]);
+    }, [poiDemand, pickedFromDisplay, handleDemandPick]);
 
     const poiSensitiveLayer = useMemo(() => {
         if (!sensitivePoints.length) return null;
-        // 基于 Zoom 计算平滑过渡因子 (10.5 远景 -> 13.5 近景)
-        const z = viewState.zoom || 11;
+        // 基于量化 Zoom 计算平滑过渡因子 (10.5 远景 -> 13.5 近景)
+        const z = quantizedZoom;
         const t = Math.max(0, Math.min(1, (z - 10.5) / 3.0));
         const fillAlpha = Math.round(t * 25);
         const lineAlpha = Math.round(t * 200);
@@ -210,7 +233,7 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             getLineColor: [255, 80, 80, lineAlpha],
             getElevation: 400,
         });
-    }, [sensitivePoints, viewState.zoom]);
+    }, [sensitivePoints, quantizedZoom]);
 
     // 组合静态图层（渐进式渲染）
     const staticLayers = useMemo(() => {
@@ -221,8 +244,8 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         return layers;
     }, [buildingsLayer, poiDemandLayer, poiSensitiveLayer]);
 
-    // 实时读取最新的 mutable buffer，不缓存，避免暂停触发 React 重绘时拿到初始的空数组
-    const activeUAVs = uavModelBuffer.filter(u => u.isActive);
+    // 实时读取最新的 mutable buffer（使用预计算的活跃列表，避免每帧 filter）
+    const activeUAVs = getActiveUAVs();
 
     const uavModelLayer = useMemo(() => {
         return new ScenegraphLayer({
@@ -252,11 +275,11 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                 }
             }
         });
-    }, [viewState.zoom]);
+    }, []);
 
     const activeTailLayer = useMemo(() => {
-        // 轨迹平滑衰减处理
-        const z = viewState.zoom || 11;
+        // 轨迹平滑衰减处理（使用量化 zoom，减少重建频率）
+        const z = quantizedZoom;
         const t = Math.max(0, Math.min(1, (z - 10.5) / 3.0));
         const widthMinPx = 0.5 + t * 2.0;    // 0.5px -> 2.5px
         const layerOpacity = 0.4 + t * 0.5;  // 0.4 -> 0.9
@@ -286,7 +309,7 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                 getColor: energyData
             }
         });
-    }, [trajectories, energyData, viewState.zoom]);
+    }, [trajectories, energyData, quantizedZoom]);
 
     const hoverPathLayer = useMemo(() => {
         let pathData: any[] = [];
@@ -415,17 +438,6 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                     timeRangeMax={timeRangeRef.current.max}
                 />
 
-                <AlgoLabPanel
-                    city={currentCity}
-                    onTrajectoriesUpdated={reloadCurrentTrajectories}
-                    pickMode={pickMode}
-                    setPickMode={setPickMode}
-                    pickedFrom={pickedFrom}
-                    pickedTo={pickedTo}
-                    onClearPick={() => { setPickedFrom(null); setPickedTo(null); setPickMode(null); }}
-                    onToggle={onRightPanelToggle}
-                    isOpen={isRightPanelOpen}
-                />
                 <WeatherOverlay />
             </div>
         </ErrorBoundary>

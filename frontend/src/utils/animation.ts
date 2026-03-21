@@ -2,6 +2,14 @@ import type { UAVPath } from '../types/map';
 
 export let uavModelBuffer: any[] = [];
 
+/** 当前活跃的 UAV 数量（由 updateActiveUAVsBuffer 维护） */
+let activeUAVCount = 0;
+
+/** 获取活跃 UAV 列表（零分配：直接 slice 已排序的 buffer 前 N 项） */
+export function getActiveUAVs(): any[] {
+    return uavModelBuffer.slice(0, activeUAVCount);
+}
+
 
 const getSegAngle = (path: [number, number, number][], seg: number) => {
     const a = path[seg];
@@ -119,6 +127,9 @@ export function updateActiveUAVsBuffer(trajectories: UAVPath[], currentGlobalTim
         cell.isActive = false;
         cell.trajectory = null;
     }
+
+    // 记录活跃数量供 getActiveUAVs() 使用
+    activeUAVCount = activeCount;
 }
 
 export function formatElapsed(seconds: number): string {

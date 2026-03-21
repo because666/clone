@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
-import { updateActiveUAVsBuffer, formatElapsed, uavModelBuffer } from '../utils/animation';
+import { updateActiveUAVsBuffer, formatElapsed, uavModelBuffer, getActiveUAVs } from '../utils/animation';
 
 const ANIMATION_SPEED = 0.016;
 const ALERT_CHECK_INTERVAL = 60; // 每 60 帧检测一次告警（约 1 秒）
@@ -212,7 +212,7 @@ export function useUAVAnimation(
                 if (layer?.id === 'uav-model-layer') {
                     updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max, uavModelBuffer);
                     return layer.clone({
-                        data: uavModelBuffer.filter(u => u.isActive),
+                        data: getActiveUAVs(),
                         updateTriggers: {
                             getPosition: next,
                             getOrientation: next
@@ -280,7 +280,7 @@ export function useUAVAnimation(
                 if (layer?.id === 'uav-model-layer') {
                     updateActiveUAVsBuffer(trajectoriesRef.current, currentTimeRef.current, timeRangeRef.current.max, uavModelBuffer);
                     return layer.clone({
-                        data: uavModelBuffer.filter(u => u.isActive),
+                        data: getActiveUAVs(),
                         updateTriggers: {
                             getPosition: currentTimeRef.current,
                             getOrientation: currentTimeRef.current

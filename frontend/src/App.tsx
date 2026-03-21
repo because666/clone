@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import MapContainer from './components/MapContainer';
 import DashboardOverlay from './components/DashboardOverlay';
 import { WindSpeedProvider } from './contexts/WindSpeedContext';
@@ -6,21 +5,13 @@ import { AlertNotificationProvider } from './components/AlertNotificationProvide
 import { WeatherProvider } from './contexts/WeatherContext';
 
 function App() {
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
-
   return (
     <WindSpeedProvider>
       <AlertNotificationProvider>
         <WeatherProvider>
           <div className="relative w-screen h-screen overflow-hidden bg-slate-900">
-            <DashboardOverlay 
-                hideRightPanels={isRightPanelOpen} 
-                onOpenAlgoLab={() => setIsRightPanelOpen(true)}
-            />
-            <MapContainer 
-                onRightPanelToggle={setIsRightPanelOpen} 
-                isRightPanelOpen={isRightPanelOpen}
-            />
+            <DashboardOverlay />
+            <MapContainer />
           </div>
         </WeatherProvider>
       </AlertNotificationProvider>
