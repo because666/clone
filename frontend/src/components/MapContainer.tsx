@@ -34,7 +34,7 @@ export default function MapContainer() {
         timeRangeRef,
         currentTimeRef,
         loadCityData,
-        reloadCurrentTrajectories,
+        setTrajectories,
         clearError
     } = useCityData();
 
@@ -127,7 +127,7 @@ export default function MapContainer() {
 
             showToast(`正在生成到 ${picked.name || picked.id} 的轨迹...`, 'loading');
 
-            // 异步调用 single API 生成轨迹
+            // 异步调用 single API 生成轨迹（仅演示，不保存到文件）
             fetch('/api/single', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -135,7 +135,6 @@ export default function MapContainer() {
                     city: currentCity,
                     from_lat: from.lat, from_lon: from.lon, from_id: from.id,
                     to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id,
-                    append: true,
                 }),
             })
                 .then(async r => {
@@ -150,16 +149,15 @@ export default function MapContainer() {
                         throw new Error(`非预期的服务器响应 (状态码 ${r.status})`);
                     }
                 })
-                .then(async ({ data }) => {
-                    if (data.ok || data.status === 'success') {
+                .then(({ data }) => {
+                    if (data.ok && data.trajectory) {
                         showToast(`轨迹生成成功！`, 'success');
-                        const newTrajs = await reloadCurrentTrajectories();
-                        if (newTrajs && data.flight_id) {
-                            const newFlight = newTrajs.find((t: any) => t.id === data.flight_id);
-                            if (newFlight) {
-                                setSelectedFlight(newFlight);
-                            }
-                        }
+                        // 将 API 返回的轨迹 timestamps 偏移到当前动画时间，使其立即可见
+                        const newTraj = { ...data.trajectory };
+                        const offset = currentTimeRef.current;
+                        newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
+                        setTrajectories(prev => [...prev, newTraj]);
+                        setSelectedFlight(newTraj);
                     } else {
                         showToast(`生成失败：${data.error || data.message || '未知错误'}`, 'error');
                     }
@@ -168,7 +166,7 @@ export default function MapContainer() {
                     showToast(`请求失败：${e.message}`, 'error');
                 });
         }
-    }, [currentCity, reloadCurrentTrajectories, showToast]);
+    }, [currentCity, setTrajectories, showToast]);
 
     const handleMapLoad = useCallback(() => {
         const map = mapRef.current?.getMap();

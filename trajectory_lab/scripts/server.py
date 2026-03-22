@@ -255,6 +255,11 @@ def single_generate():
         "path_points": len(result.path),
         "nfz_violations": result.nfz_violations,
         "elapsed_s": round(elapsed, 3),
+        "trajectory": {
+            "id": result.flight_id,
+            "path": result.path,
+            "timestamps": result.timestamps,
+        }
     })
 
 
