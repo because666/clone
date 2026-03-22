@@ -1,10 +1,28 @@
-import { Activity, Package, Navigation } from 'lucide-react';
+import { Activity, Package, Navigation, BarChart3 } from 'lucide-react';
 import RightControlPanel from './RightControlPanel';
 
-export default function DashboardOverlay() {
+interface Props {
+    onOpenAnalytics: () => void;
+}
+
+export default function DashboardOverlay({ onOpenAnalytics }: Props) {
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 p-6 font-sans">
             <RightControlPanel />
+
+            {/* Top Left Analytics Button */}
+            <div className="absolute top-16 left-6 pointer-events-auto z-10">
+                <button 
+                    onClick={onOpenAnalytics}
+                    className="flex items-center justify-center gap-3 px-6 py-3 bg-white/40 backdrop-blur-2xl border border-white/50 rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] transition-all transform hover:scale-[1.02] active:scale-[0.98] group overflow-hidden relative"
+                >
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900/5 to-transparent pointer-events-none"></div>
+                    <BarChart3 size={20} className="text-indigo-700 relative z-10" />
+                    <span className="text-base font-bold tracking-wide text-slate-800 relative z-10" style={{ textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}>
+                        统计面板
+                    </span>
+                </button>
+            </div>
 
             {/* Left Bottom Panel */}
             <div className="absolute bottom-10 left-6 pointer-events-auto bg-white/40 backdrop-blur-2xl border border-white/50 px-7 py-6 rounded-[2rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] min-w-[360px] flex flex-col gap-6 overflow-hidden">

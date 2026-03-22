@@ -15,6 +15,8 @@ import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
 import WeatherOverlay from './WeatherOverlay';
+import AnalyticsPanel from './AnalyticsPanel';
+import DashboardOverlay from './DashboardOverlay';
 import { getActiveUAVs } from '../utils/animation';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
 import { ErrorAlert } from './ErrorAlert';
@@ -39,6 +41,7 @@ export default function MapContainer() {
     } = useCityData();
 
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
+    const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
     const [toastState, setToastState] = useState<{ msg: string, type: 'info' | 'success' | 'error' | 'loading' } | null>(null);
 
     const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'loading' = 'info') => {
@@ -428,6 +431,8 @@ export default function MapContainer() {
                     />
                 </DeckGL>
 
+                <DashboardOverlay onOpenAnalytics={() => setIsAnalyticsOpen(true)} />
+
                 <HoverTooltip hoverInfo={hoverInfo} />
 
                 <FlightDetailPanel
@@ -435,6 +440,14 @@ export default function MapContainer() {
                     energyData={energyData}
                     currentTimeRef={currentTimeRef}
                     setSelectedFlight={setSelectedFlight}
+                />
+
+                <AnalyticsPanel 
+                    trajectories={trajectories}
+                    energyData={energyData}
+                    currentTimeRef={currentTimeRef}
+                    isVisible={isAnalyticsOpen}
+                    onClose={() => setIsAnalyticsOpen(false)}
                 />
 
                 {/* 骨架屏 - 在数据加载完成前显示 */}

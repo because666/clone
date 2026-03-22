@@ -20,7 +20,7 @@ export default function RightControlPanel() {
     const { windSpeed, setWindSpeed } = useWindSpeed();
     const { alerts, totalCounts } = useAlerts();
     const { weather, setWeather, temperature, setTemperature } = useWeather();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
 
     const getWeatherIcon = () => {
         switch (weather) {
