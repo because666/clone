@@ -19,9 +19,14 @@ try:
     from flask import Flask, request, jsonify, send_from_directory
     from flask_cors import CORS
     from flask_compress import Compress
+    import jwt
+    import datetime
+    from functools import wraps
 except ImportError:
-    print("缺少依赖，请运行: pip install flask flask-cors flask-compress")
+    print("缺少依赖，请运行: pip install flask flask-cors flask-compress pyjwt")
     sys.exit(1)
+
+from trajectory_lab.models.user import db, User, AuditLog
 
 from trajectory_lab.core.poi_loader import load_city_pois
 from trajectory_lab.core.planner import plan
@@ -36,8 +41,24 @@ logging.basicConfig(
 logger = logging.getLogger("TrajServer")
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'AetherWeave-SuperSecretKey-2026'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///aetherweave.db' # 默认开发环境使用 SQLite
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 CORS(app)  # 允许前端跨域访问
 Compress(app)  # 启用 GZIP 压缩
+
+db.init_app(app)
+
+# 初始化数据库结构及默认管理员
+with app.app_context():
+    db.create_all()
+    if not User.query.filter_by(username='admin').first():
+        admin_user = User(username='admin', role='ADMIN')
+        admin_user.set_password('admin123')
+        db.session.add(admin_user)
+        db.session.commit()
+
 
 # 静态文件路径配置
 FRONTEND_DIST = ROOT / "frontend" / "dist"
@@ -57,6 +78,97 @@ def get_city_pois(city: str, buffer_m: float = 0.0):
         _POI_CACHE[key] = load_city_pois(city, buffer_m=buffer_m)
     return _POI_CACHE[key]
 
+
+# ── 权限控制 (JWT) ───────────
+def role_required(*allowed_roles):
+    def decorator(f):
+        @wraps(f)
+        def verify_token(*args, **kwargs):
+            token = request.headers.get('Authorization', '').replace('Bearer ', '')
+            if not token:
+                return jsonify({"error": "缺少鉴权 Token"}), 401
+            try:
+                payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+                if payload['role'] not in allowed_roles:
+                    return jsonify({"error": "无权访问此接"}), 403
+                request.user = payload
+            except jwt.ExpiredSignatureError:
+                return jsonify({"error": "Token 已过期"}), 401
+            except jwt.InvalidTokenError:
+                return jsonify({"error": "无效的 Token"}), 401
+            return f(*args, **kwargs)
+        return verify_token
+    return decorator
+
+
+def log_audit(action, resource=None, details=None):
+    """记录操作日志"""
+    try:
+        user_id = getattr(request, 'user', {}).get('sub')
+        ip = request.remote_addr
+        log_entry = AuditLog(
+            user_id=user_id,
+            action=action,
+            resource=resource,
+            details=json.dumps(details) if details else None,
+            ip_address=ip
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"审计日志记录失败: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Auth 模块
+# ═══════════════════════════════════════════════════════════════════════
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({"error": "参数缺失"}), 400
+
+    user = User.query.filter_by(username=data['username']).first()
+    if not user or not user.check_password(data['password']):
+        return jsonify({"error": "账号或密码错误"}), 401
+    
+    if not user.is_active:
+        return jsonify({"error": "账号已禁用"}), 403
+
+    # 生成 token
+    payload = {
+        'sub': user.id,
+        'username': user.username,
+        'role': user.role,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
+    }
+    token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+    
+    # 手动触发登录日志（此处 request 中尚无 user 属性）
+    request.user = payload
+    log_audit("LOGIN", resource="users", details={"username": user.username})
+
+    return jsonify({
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role
+        }
+    })
+
+@app.route('/api/users/me', methods=['GET'])
+@role_required('ADMIN', 'DISPATCHER', 'VIEWER')
+def get_me():
+    user = User.query.get(request.user['sub'])
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "created_at": user.created_at.isoformat()
+    })
 
 # ═══════════════════════════════════════════════════════════════════════
 # GET /api/status

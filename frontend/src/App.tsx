@@ -1,22 +1,24 @@
-import MapContainer from './components/MapContainer';
-import { WindSpeedProvider } from './contexts/WindSpeedContext';
-import { AlertNotificationProvider } from './components/AlertNotificationProvider';
-import { WeatherProvider } from './contexts/WeatherContext';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   return (
-    <WindSpeedProvider>
-      <AlertNotificationProvider>
-        <WeatherProvider>
-          <div className="relative w-screen h-screen overflow-hidden bg-slate-900">
-            <MapContainer />
-          </div>
-        </WeatherProvider>
-      </AlertNotificationProvider>
-    </WindSpeedProvider>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
-
 
 export default App;
 
