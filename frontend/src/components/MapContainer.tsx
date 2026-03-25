@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
-import { GeoJsonLayer, ColumnLayer, PathLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, ColumnLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import { Map as MapGL, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -198,13 +198,15 @@ export default function MapContainer() {
     // 渐进式渲染：根据加载状态决定是否渲染各图层
     const buildingsLayer = useMemo(() => {
         if (!buildingsData) return null;
+        const z = quantizedZoom;
         return new GeoJsonLayer({
             id: 'buildings-layer',
             data: buildingsData,
             extruded: true,
             filled: true,
-            stroked: true,
-            wireframe: true,
+            // 远景时关闭3D轮廓线，避免密集的线框导致抗锯齿计算过载和花屏
+            stroked: z > 13,
+            wireframe: z > 13,
             getFillColor: [170, 180, 195, 255],
             getLineColor: [80, 90, 110, 255],
             getLineWidth: 1,
@@ -214,7 +216,7 @@ export default function MapContainer() {
             autoHighlight: false,
             material: { ambient: 0.4, diffuse: 0.6, shininess: 32, specularColor: [220, 230, 240] },
         });
-    }, [buildingsData]);
+    }, [buildingsData, quantizedZoom]);
 
     const poiDemandLayer = useMemo(() => {
         if (!poiDemand) return null;
@@ -325,6 +327,35 @@ export default function MapContainer() {
         });
     }, []);
 
+    // 【性能优化: LOD降级层】远距离时使用简单的光点替代 3D 模型
+    const uavPointLayer = useMemo(() => {
+        return new ScatterplotLayer({
+            id: 'uav-point-layer',
+            data: [] as any[], // 由动画 hook 动态 clone 更新
+            getPosition: (d: any) => d.position,
+            getFillColor: [0, 255, 255, 255],
+            getRadius: 8,
+            radiusMinPixels: 4,
+            radiusMaxPixels: 12,
+            pickable: true,
+            autoHighlight: true,
+            highlightColor: [255, 255, 0, 255],
+            onClick: (info: any) => {
+                if (info.object) setSelectedFlight(info.object.trajectory);
+            },
+            onHover: (info: any) => {
+                if (info.object) {
+                    setHoverInfo({
+                        ...info,
+                        object: { properties: { name: `无人机 ${info.object.id}`, type: 'uav' } }
+                    });
+                } else if (hoverInfo?.object?.properties?.type === 'uav') {
+                    setHoverInfo(null);
+                }
+            }
+        });
+    }, []);
+
     const activeTailLayer = useMemo(() => {
         // 轨迹平滑衰减处理（使用量化 zoom，减少重建频率）
         const z = quantizedZoom;
@@ -383,11 +414,17 @@ export default function MapContainer() {
         ...staticLayers,
         activeTailLayer,
         hoverPathLayer,
-        uavModelLayer.clone({
+        // 根据视角缩放级别进行 LOD：远景用光点替代 3D 模型大幅减少 GPU 负担
+        quantizedZoom >= 13 ? uavModelLayer.clone({
             data: activeUAVs,
             updateTriggers: {
                 getPosition: currentTimeRef.current,
                 getOrientation: currentTimeRef.current
+            }
+        }) : uavPointLayer.clone({
+            data: activeUAVs,
+            updateTriggers: {
+                getPosition: currentTimeRef.current
             }
         })
     ].filter(Boolean);

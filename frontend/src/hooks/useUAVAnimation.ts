@@ -3,16 +3,17 @@ import type { UAVPath } from '../types/map';
 import { updateActiveUAVsBuffer, formatElapsed, uavModelBuffer, getActiveUAVs } from '../utils/animation';
 
 const ANIMATION_SPEED = 0.016;
-const ALERT_CHECK_INTERVAL = 60; // 每 60 帧检测一次告警（约 1 秒）
+// 告警分发帧切片数量：将一秒内的巨量计算平摊到 60 帧中完成，解决突发掉帧
+const ALERT_SLICE_BINS = 60; 
 
-/** 禁飞缓冲半径（米） */
+/** 禁飞缓冲半径（米） - 【优化】灵敏度下调，减少多余告警 */
 const NFZ_RADIUS: Record<string, number> = {
-    hospital: 300, school: 300,
-    clinic: 250, kindergarten: 250,
-    college: 200, university: 200,
-    police: 150,
+    hospital: 150, school: 150,
+    clinic: 100, kindergarten: 100,
+    college: 120, university: 120,
+    police: 80,
 };
-const DEFAULT_NFZ_RADIUS = 200;
+const DEFAULT_NFZ_RADIUS = 100;
 
 /** 极速坐标系两点距离平方估算（米^2），免除三角/开方等高昂运算 */
 function fastDistSq(lon1: number, lat1: number, lon2: number, lat2: number): number {
@@ -121,14 +122,17 @@ export function useUAVAnimation(
         }
     }, []);
 
-    // ---- 告警检测逻辑 ----
-    const checkAlerts = useCallback((currentTime: number) => {
+    // ---- 告警检测逻辑（使用时间切片优化） ----
+    const checkAlerts = useCallback((currentTime: number, currentFrame: number) => {
         if (!pushAlert || !energyData) return;
 
         const wf = calcWindFactor(windSpeed ?? 3);
         const sensitivePoints = sensitivePointsRef.current;
+        
+        // Time Slicing: 把 O(M*N) 的全量计算平摊。当前帧只处理索引满足条件的无人机
+        const binIndex = currentFrame % ALERT_SLICE_BINS;
 
-        for (let i = 0; i < uavModelBuffer.length; i++) {
+        for (let i = binIndex; i < uavModelBuffer.length; i += ALERT_SLICE_BINS) {
             const uav = uavModelBuffer[i];
             if (!uav.isActive || !uav.trajectory) continue;
 
@@ -209,7 +213,7 @@ export function useUAVAnimation(
                         currentTime: next
                     });
                 }
-                if (layer?.id === 'uav-model-layer') {
+                if (layer?.id === 'uav-model-layer' || layer?.id === 'uav-point-layer') {
                     updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max, uavModelBuffer);
                     return layer.clone({
                         data: getActiveUAVs(),
@@ -234,12 +238,9 @@ export function useUAVAnimation(
 
         updateDashboardDOM(next);
 
-        // 降频告警检测
+        // 降频告警检测 -> 优化为时间切片告警检测，每帧只算 1/60 的数据！消灭性能尖刺！
         alertFrameCounter.current++;
-        if (alertFrameCounter.current >= ALERT_CHECK_INTERVAL) {
-            alertFrameCounter.current = 0;
-            checkAlerts(next);
-        }
+        checkAlerts(next, alertFrameCounter.current);
 
         animFrameRef.current = requestAnimationFrame(animate);
     }, [animationSpeed, updateDashboardDOM, isPlaying, timeRangeRef, currentTimeRef, deckRef, checkAlerts]);
@@ -277,7 +278,7 @@ export function useUAVAnimation(
                         currentTime: currentTimeRef.current
                     });
                 }
-                if (layer?.id === 'uav-model-layer') {
+                if (layer?.id === 'uav-model-layer' || layer?.id === 'uav-point-layer') {
                     updateActiveUAVsBuffer(trajectoriesRef.current, currentTimeRef.current, timeRangeRef.current.max, uavModelBuffer);
                     return layer.clone({
                         data: getActiveUAVs(),
