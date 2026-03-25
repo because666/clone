@@ -138,6 +138,7 @@ export default function MapContainer() {
                     city: currentCity,
                     from_lat: from.lat, from_lon: from.lon, from_id: from.id,
                     to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id,
+                    save: false // 仅在前端演示，不保存到后端 json 文件以避免触发页面刷新
                 }),
             })
                 .then(async r => {

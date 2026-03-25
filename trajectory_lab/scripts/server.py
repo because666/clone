@@ -184,6 +184,7 @@ def single_generate():
     to_lon   = float(body.get("to_lon", 0))
     to_id    = body.get("to_id", "")
     append   = bool(body.get("append", False))
+    save     = bool(body.get("save", False))
     buffer_m = float(body.get("buffer", 0))
 
     if from_lat == 0 and from_lon == 0:
@@ -217,32 +218,33 @@ def single_generate():
         to_poi_id=to_id,
     )
 
-    # 写文件
-    OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
-    out_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
+    # 写文件 (如果设置了 save 标志)
+    if save:
+        OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
+        out_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
 
-    if append and out_path.exists():
-        with open(out_path, "r", encoding="utf-8") as f:
-            existing = json.load(f)
-        existing["trajectories"].append({
-            "id": result.flight_id,
-            "path": result.path,
-            "timestamps": result.timestamps,
-        })
-        existing["totalFlights"] = len(existing["trajectories"])
-        existing["sampledFlights"] = len(existing["trajectories"])
-        if existing["trajectories"]:
-            all_max = max(
-                t["timestamps"][-1] for t in existing["trajectories"]
-                if t.get("timestamps")
-            )
-            existing["timeRange"]["max"] = round(all_max, 3)
-        data = existing
-    else:
-        data = build_output([result], city)
+        if append and out_path.exists():
+            with open(out_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+            existing["trajectories"].append({
+                "id": result.flight_id,
+                "path": result.path,
+                "timestamps": result.timestamps,
+            })
+            existing["totalFlights"] = len(existing["trajectories"])
+            existing["sampledFlights"] = len(existing["trajectories"])
+            if existing["trajectories"]:
+                all_max = max(
+                    t["timestamps"][-1] for t in existing["trajectories"]
+                    if t.get("timestamps")
+                )
+                existing["timeRange"]["max"] = round(all_max, 3)
+            data = existing
+        else:
+            data = build_output([result], city)
 
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"))
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"))
 
     elapsed = time.time() - t0
     logger.info(f"[single] 完成: {fid}, 违规段: {result.nfz_violations}, 耗时: {elapsed:.3f}s")
@@ -297,4 +299,4 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
     logger.info(f"轨迹算法服务启动于 http://{args.host}:{args.port}")
-    app.run(host=args.host, port=args.port, debug=False)
+    app.run(host=args.host, port=args.port, debug=True)
