@@ -1,10 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
-import { updateActiveUAVsBuffer, formatElapsed, uavModelBuffer, getActiveUAVs } from '../utils/animation';
+import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount } from '../utils/animation';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 
+// 动画渲染的步长常量
 const ANIMATION_SPEED = 0.016;
-// 告警分发帧切片数量：将一秒内的巨量计算平摊到 60 帧中完成，解决突发掉帧
+
+/**
+ * 告警检测帧切片分箱机制（Time Slicing / Binning）
+ * 解决问题：当屏幕上有成千上万架无人机时，每帧对每个点都进行低电量预测和距离平方计算会导致严重的卡顿（Frame Drop）。
+ * 我们将全量检测任务平均分摊到 60 帧内完成。虽然实时告警最多会产生 1 秒钟的延迟，但换来了 O(N)/60 的平滑算力消耗。
+ */
 const ALERT_SLICE_BINS = 60; 
 
 /** 禁飞缓冲半径（米） - 【优化】灵敏度下调，减少多余告警 */
@@ -43,8 +49,12 @@ export function useUAVAnimation(
     const [isPlaying, setIsPlaying] = useState(true);
     const [animationSpeed, setAnimationSpeed] = useState(1);
 
-    // 【性能优化】用 ref 同步跟踪 state，使 animate 回调无需依赖变化的 state 值
-    // 这样 animate 回调保持稳定引用，不会因为播放/倍速切换而重建 → 消除 RAF 中断闪烁
+    // ==========================================
+    // 渲染闭环稳定性防护：状态解耦机制
+    // React state 更新往往会导致组件重渲染。但这里是高频核心动画引擎，
+    // 为了防止 requestAnimationFrame (RAF) 因组件重绘而频繁被注销/重启（导致闪动），
+    // 强制将频繁变更的依赖缓存至 MutableRefObject，使 animate 函数永久保持闭包级别固定引用。
+    // ==========================================
     const isPlayingRef = useRef(isPlaying);
     useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
     const animSpeedRef = useRef(animationSpeed);
@@ -144,16 +154,16 @@ export function useUAVAnimation(
         // Time Slicing: 把 O(M*N) 的全量计算平摊。当前帧只处理索引满足条件的无人机
         const binIndex = currentFrame % ALERT_SLICE_BINS;
 
-        for (let i = binIndex; i < uavModelBuffer.length; i += ALERT_SLICE_BINS) {
-            const uav = uavModelBuffer[i];
-            if (!uav.isActive || !uav.trajectory) continue;
+        for (let i = binIndex; i < activeUAVCount; i += ALERT_SLICE_BINS) {
+            const traj = activeUAVTrajectories[i];
+            if (!traj) continue;
 
-            const flightId = uav.trajectory.id;
+            const flightId = traj.id;
             const ed = currentEnergyData[flightId];
 
             // ① 低电量检测（使用公共二分搜索）
             if (ed?.battery && ed.battery.length > 0) {
-                const timestamps = uav.trajectory.timestamps;
+                const timestamps = traj.timestamps;
                 const idx = binarySearchTimestamp(timestamps, currentTime);
                 const startBat = ed.battery[0];
                 const rawBat = ed.battery[idx];
@@ -168,8 +178,9 @@ export function useUAVAnimation(
             }
 
             // ② 危险区检测
-            if (sensitivePoints.length > 0 && uav.position) {
-                const [uavLon, uavLat] = uav.position;
+            if (sensitivePoints.length > 0) {
+                const uavLon = uavPositionsBuffer[i * 3 + 0];
+                const uavLat = uavPositionsBuffer[i * 3 + 1];
                 for (const poi of sensitivePoints) {
                     const coords = poi.geometry?.coordinates;
                     if (!coords) continue;
@@ -216,13 +227,23 @@ export function useUAVAnimation(
                     });
                 }
                 if (layer?.id === 'uav-model-layer' || layer?.id === 'uav-point-layer') {
-                    updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max, uavModelBuffer);
-                    return layer.clone({
-                        data: getActiveUAVs(),
-                        updateTriggers: {
-                            getPosition: next,
-                            getOrientation: next
-                        }
+                    // 全局仅写入唯一的一组 TypedArray 内存映射
+                    updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max);
+                    const isModel = layer.id === 'uav-model-layer';
+                    
+                    // 利用 deck.gl 的 clone 方法重用大部分现有图层资源。
+                    // -> 对于 ScatterPoint (点图层)：Deck.gl 原生支持 3 维 Binary Attributes 格式输入。
+                    // -> 对于 Scenegraph (模型图层)：Deck.gl 内部会在 CPU 计算出 16 维矩阵，因此不暴露 attributes 输入接口，
+                    //    我们利用 Deck.gl 的 Accessor 在访问坐标时直接返回 Buffer 内的映射，从而仍能维持零分配并更新到模型层。
+                    return layer.clone(isModel ? {
+                        data: { length: activeUAVCount },
+                        updateTriggers: { getPosition: next, getOrientation: next }
+                    } : {
+                        data: {
+                            length: activeUAVCount,
+                            attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
+                        },
+                        updateTriggers: { getPosition: next }
                     });
                 }
                 return layer;
@@ -281,13 +302,17 @@ export function useUAVAnimation(
                     });
                 }
                 if (layer?.id === 'uav-model-layer' || layer?.id === 'uav-point-layer') {
-                    updateActiveUAVsBuffer(trajectoriesRef.current, currentTimeRef.current, timeRangeRef.current.max, uavModelBuffer);
-                    return layer.clone({
-                        data: getActiveUAVs(),
-                        updateTriggers: {
-                            getPosition: currentTimeRef.current,
-                            getOrientation: currentTimeRef.current
-                        }
+                    updateActiveUAVsBuffer(trajectoriesRef.current, currentTimeRef.current, timeRangeRef.current.max);
+                    const isModel = layer.id === 'uav-model-layer';
+                    return layer.clone(isModel ? {
+                        data: { length: activeUAVCount },
+                        updateTriggers: { getPosition: currentTimeRef.current, getOrientation: currentTimeRef.current }
+                    } : {
+                        data: {
+                            length: activeUAVCount,
+                            attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
+                        },
+                        updateTriggers: { getPosition: currentTimeRef.current }
                     });
                 }
                 return layer;

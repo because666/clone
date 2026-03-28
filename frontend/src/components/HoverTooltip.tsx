@@ -16,8 +16,8 @@ export default function HoverTooltip({ hoverInfo }: HoverInfoProps) {
 
     return (
         <div
-            className="absolute z-[60] pointer-events-none px-3 py-2 bg-slate-800/95 text-white text-sm rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex flex-col gap-1.5 backdrop-blur-sm border border-slate-700/50 transition-opacity"
-            style={{ left: hoverInfo.x + 15, top: hoverInfo.y + 15 }}
+            className="absolute top-0 left-0 z-[60] pointer-events-none px-3 py-2 bg-slate-800/95 text-white text-sm rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.2)] flex flex-col gap-1.5 backdrop-blur-sm border border-slate-700/50 transition-opacity"
+            style={{ transform: `translate3d(${hoverInfo.x + 15}px, ${hoverInfo.y + 15}px, 0)` }}
         >
             {hasName && (
                 <div className="font-bold text-slate-100 flex items-center gap-1.5 whitespace-nowrap">

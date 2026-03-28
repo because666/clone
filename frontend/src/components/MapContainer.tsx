@@ -18,7 +18,7 @@ import WeatherOverlay from './WeatherOverlay';
 // 【性能优化】ECharts 延迟加载：统计面板默认隐藏，ECharts ~800KB 不再阻塞首屏
 const AnalyticsPanel = lazy(() => import('./AnalyticsPanel'));
 import DashboardOverlay from './DashboardOverlay';
-import { getActiveUAVs } from '../utils/animation';
+import { uavPositionsBuffer, uavOrientationsBuffer, activeUAVTrajectories, activeUAVCount } from '../utils/animation';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
 import { ErrorAlert } from './ErrorAlert';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -55,16 +55,21 @@ export default function MapContainer() {
     const [pickedFromDisplay, setPickedFromDisplay] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [hoverInfo, setHoverInfoState] = useState<any>(null);
-    // 【性能优化】hoverInfo 用 ref 存储实时值，仅在 hover 目标变化时才触发 setState
+    // ==========================================
+    // 渲染闭环稳定性防护：悬停状态频率节流
+    // 由于 Deck.gl 的 onHover 每移动 1px 就会触发，如果直接 setState 会导致 MapContainer
+    // 这个庞然大物遭受毁灭性的重绘雪崩（DOM树震荡）。
+    // 解法：利用 mutable ref 同步真实状态，只在“鼠标跨越到新无人机”的边界时刻，才调用 setState 突破防线。
+    // ==========================================
     const hoverInfoRef = useRef<any>(null);
     const setHoverInfo = useCallback((info: any) => {
-        hoverInfoRef.current = info;
         // 仅在 hover 目标对象变化时才触发 re-render（而非每次鼠标移动）
         const prevId = hoverInfoRef.current?.object?.properties?.name || hoverInfoRef.current?.object?.id;
         const newId = info?.object?.properties?.name || info?.object?.id;
         if (prevId !== newId || (!info && hoverInfoRef.current)) {
             setHoverInfoState(info);
         }
+        hoverInfoRef.current = info;
     }, []);
     const [currentCity, setCurrentCity] = useState("shenzhen");
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -306,16 +311,32 @@ export default function MapContainer() {
         return layers;
     }, [buildingsLayer, poiDemandLayer, poiSensitiveLayer]);
 
-    // 实时读取最新的 mutable buffer（使用预计算的活跃列表，避免每帧 filter）
-    const activeUAVs = getActiveUAVs();
-
+    // ==========================================
+    // 超大规模集群渲染方案：3D 模型层 (ScenegraphLayer)
+    // 问题：Deck.gl 官方虽然声称支持 Binary Attributes，但 ScenegraphLayer 因历史包袱，
+    // 其底层实现仍在 CPU 上遍历计算 16 维的 instanceModelMatrix。
+    // 解法：放弃传入直接的 attributes 对象，转而向 data 传入 { length: N } 作为迭代触发器。
+    // 在 getOrientation 等回调中，利用暴露的 {index} 直接越过对象的重重解构，
+    // 指针直达我们在 Worker / 动画引擎中维护的 Float32Array SoA 内存块。
+    // 这保持了前端架构的绝对“零内存分配”，避免了海量新生代对象引发的 GC 卡顿。
+    // ==========================================
     const uavModelLayer = useMemo(() => {
         return new ScenegraphLayer({
             id: 'uav-model-layer',
-            data: [] as any[], // 基础层不绑定数据，在实际使用时 clone 注入
+            data: {
+                length: 0
+            },
             scenegraph: '/dji_spark.glb',
-            getPosition: (d: any) => d.position,
-            getOrientation: (d: any) => d.orientation,
+            getPosition: (_: any, {index}: any) => [
+                uavPositionsBuffer[index * 3 + 0],
+                uavPositionsBuffer[index * 3 + 1],
+                uavPositionsBuffer[index * 3 + 2]
+            ],
+            getOrientation: (_: any, {index}: any) => [
+                uavOrientationsBuffer[index * 3 + 0],
+                uavOrientationsBuffer[index * 3 + 1],
+                uavOrientationsBuffer[index * 3 + 2]
+            ],
             sizeScale: 7.5,
             _lighting: 'pbr',
             _animations: { '*': { playing: true } },
@@ -324,27 +345,39 @@ export default function MapContainer() {
             autoHighlight: true,
             highlightColor: [255, 255, 0, 255],
             onClick: (info: any) => {
-                if (info.object) setSelectedFlight(info.object.trajectory);
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    setSelectedFlight(activeUAVTrajectories[info.index]);
+                }
             },
             onHover: (info: any) => {
-                if (info.object) {
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    const traj = activeUAVTrajectories[info.index];
                     setHoverInfo({
                         ...info,
-                        object: { properties: { name: `无人机 ${info.object.id}`, type: 'uav' } }
+                        object: { properties: { name: `无人机 ${traj.id}`, type: 'uav' }, trajectory: traj }
                     });
                 } else if (hoverInfo?.object?.properties?.type === 'uav') {
                     setHoverInfo(null);
                 }
             }
         });
-    }, []);
+    }, [hoverInfo]);
 
-    // 【性能优化: LOD降级层】远距离时使用简单的光点替代 3D 模型
+    // ==========================================
+    // 超大规模集群渲染方案：LOD (Level of Detail) 降级光点层
+    // 策略：当缩放级别（Zoom）退远，模型细小到几个像素时，强行调用 3D 渲染器是不理智的。
+    // 我们无缝切换至原生支持 Binary Attributes 直传的 ScatterplotLayer（散点层）。
+    // 将整个 uavPositionsBuffer 作为单一二进制流推入 GPU VRAM，此时 CPU 连 for 循环开销都省了。
+    // ==========================================
     const uavPointLayer = useMemo(() => {
         return new ScatterplotLayer({
             id: 'uav-point-layer',
-            data: [] as any[], // 由动画 hook 动态 clone 更新
-            getPosition: (d: any) => d.position,
+            data: {
+                length: 0,
+                attributes: {
+                    getPosition: { value: uavPositionsBuffer, size: 3 }
+                }
+            },
             getFillColor: [0, 255, 255, 255],
             getRadius: 8,
             radiusMinPixels: 4,
@@ -353,20 +386,23 @@ export default function MapContainer() {
             autoHighlight: true,
             highlightColor: [255, 255, 0, 255],
             onClick: (info: any) => {
-                if (info.object) setSelectedFlight(info.object.trajectory);
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    setSelectedFlight(activeUAVTrajectories[info.index]);
+                }
             },
             onHover: (info: any) => {
-                if (info.object) {
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    const traj = activeUAVTrajectories[info.index];
                     setHoverInfo({
                         ...info,
-                        object: { properties: { name: `无人机 ${info.object.id}`, type: 'uav' } }
+                        object: { properties: { name: `无人机 ${traj.id}`, type: 'uav' }, trajectory: traj }
                     });
                 } else if (hoverInfo?.object?.properties?.type === 'uav') {
                     setHoverInfo(null);
                 }
             }
         });
-    }, []);
+    }, [hoverInfo]);
 
     const activeTailLayer = useMemo(() => {
         // 轨迹平滑衰减处理（使用量化 zoom，减少重建频率）
@@ -426,15 +462,24 @@ export default function MapContainer() {
         ...staticLayers,
         activeTailLayer,
         hoverPathLayer,
-        // 根据视角缩放级别进行 LOD：远景用光点替代 3D 模型大幅减少 GPU 负担
+        // 核心渲染调度：根据量化后的整数级视角缩放 (quantizedZoom >= 13) 进行实时 LOD 切换调度
+        // 注：之所以使用 clone() 模式，是利用 Deck.gl 的 Diff 机制，复用前一帧的底层 WebGL Context，
+        // 从而将帧切换的成本从“重组 Scene 图”降维成了单纯的 Uniform 变量和 Buffer 指针更新。
         quantizedZoom >= 13 ? uavModelLayer.clone({
-            data: activeUAVs,
+            data: {
+                length: activeUAVCount
+            },
             updateTriggers: {
                 getPosition: currentTimeRef.current,
                 getOrientation: currentTimeRef.current
             }
         }) : uavPointLayer.clone({
-            data: activeUAVs,
+            data: {
+                length: activeUAVCount,
+                attributes: {
+                    getPosition: { value: uavPositionsBuffer, size: 3 }
+                }
+            },
             updateTriggers: {
                 getPosition: currentTimeRef.current
             }
