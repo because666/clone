@@ -4,10 +4,17 @@ export let uavModelBuffer: any[] = [];
 
 /** 当前活跃的 UAV 数量（由 updateActiveUAVsBuffer 维护） */
 let activeUAVCount = 0;
+/** 持久引用数组：仅在活跃数量变化时才重新 slice，避免每帧分配 GC 压力 */
+let activeSlice: any[] = [];
+let lastSlicedCount = -1;
 
-/** 获取活跃 UAV 列表（零分配：直接 slice 已排序的 buffer 前 N 项） */
+/** 获取活跃 UAV 列表（零分配：仅在数量变化时才重新切片） */
 export function getActiveUAVs(): any[] {
-    return uavModelBuffer.slice(0, activeUAVCount);
+    if (lastSlicedCount !== activeUAVCount) {
+        activeSlice = uavModelBuffer.slice(0, activeUAVCount);
+        lastSlicedCount = activeUAVCount;
+    }
+    return activeSlice;
 }
 
 
@@ -128,8 +135,9 @@ export function updateActiveUAVsBuffer(trajectories: UAVPath[], currentGlobalTim
         cell.trajectory = null;
     }
 
-    // 记录活跃数量供 getActiveUAVs() 使用
+    // 记录活跃数量供 getActiveUAVs() 使用，并强制缓存失效
     activeUAVCount = activeCount;
+    lastSlicedCount = -1; // 数据内容已变更，强制下次 getActiveUAVs() 重新切片
 }
 
 export function formatElapsed(seconds: number): string {

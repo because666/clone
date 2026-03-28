@@ -6,14 +6,14 @@ export default function WeatherOverlay() {
     const { weather } = useWeather();
     const { windSpeed } = useWindSpeed();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
+    // 【Bug 修复】用 ref 存储 animationFrameId，避免清理时捕获闭包旧值导致残留动画
+    const animFrameIdRef = useRef<number>(0);
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        let animationFrameId: number;
         let particles: any[] = [];
         const w = (canvas.width = window.innerWidth);
         const h = (canvas.height = window.innerHeight);
@@ -75,7 +75,7 @@ export default function WeatherOverlay() {
             // 隔帧渲染：每两帧只绘制一帧
             frameSkip = !frameSkip;
             if (frameSkip) {
-                animationFrameId = requestAnimationFrame(draw);
+                animFrameIdRef.current = requestAnimationFrame(draw);
                 return;
             }
 
@@ -144,7 +144,7 @@ export default function WeatherOverlay() {
                 });
             }
 
-            animationFrameId = requestAnimationFrame(draw);
+            animFrameIdRef.current = requestAnimationFrame(draw);
         };
 
         createParticles();
@@ -158,7 +158,7 @@ export default function WeatherOverlay() {
 
         window.addEventListener('resize', handleResize);
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
             window.removeEventListener('resize', handleResize);
         };
     }, [weather, windSpeed]);

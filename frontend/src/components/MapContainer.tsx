@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import DeckGL from '@deck.gl/react';
 import { GeoJsonLayer, ColumnLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
@@ -15,7 +15,8 @@ import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
 import WeatherOverlay from './WeatherOverlay';
-import AnalyticsPanel from './AnalyticsPanel';
+// 【性能优化】ECharts 延迟加载：统计面板默认隐藏，ECharts ~800KB 不再阻塞首屏
+const AnalyticsPanel = lazy(() => import('./AnalyticsPanel'));
 import DashboardOverlay from './DashboardOverlay';
 import { getActiveUAVs } from '../utils/animation';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
@@ -53,7 +54,18 @@ export default function MapContainer() {
     const pickedFromRef = useRef<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [pickedFromDisplay, setPickedFromDisplay] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [hoverInfo, setHoverInfo] = useState<any>(null);
+    const [hoverInfo, setHoverInfoState] = useState<any>(null);
+    // 【性能优化】hoverInfo 用 ref 存储实时值，仅在 hover 目标变化时才触发 setState
+    const hoverInfoRef = useRef<any>(null);
+    const setHoverInfo = useCallback((info: any) => {
+        hoverInfoRef.current = info;
+        // 仅在 hover 目标对象变化时才触发 re-render（而非每次鼠标移动）
+        const prevId = hoverInfoRef.current?.object?.properties?.name || hoverInfoRef.current?.object?.id;
+        const newId = info?.object?.properties?.name || info?.object?.id;
+        if (prevId !== newId || (!info && hoverInfoRef.current)) {
+            setHoverInfoState(info);
+        }
+    }, []);
     const [currentCity, setCurrentCity] = useState("shenzhen");
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
 
@@ -469,7 +481,7 @@ export default function MapContainer() {
                     />
                 </DeckGL>
 
-                <DashboardOverlay onOpenAnalytics={() => setIsAnalyticsOpen(true)} />
+                <DashboardOverlay onOpenAnalytics={() => setIsAnalyticsOpen(true)} currentCity={currentCity} />
 
                 <HoverTooltip hoverInfo={hoverInfo} />
 
@@ -480,13 +492,17 @@ export default function MapContainer() {
                     setSelectedFlight={setSelectedFlight}
                 />
 
-                <AnalyticsPanel 
-                    trajectories={trajectories}
-                    energyData={energyData}
-                    currentTimeRef={currentTimeRef}
-                    isVisible={isAnalyticsOpen}
-                    onClose={() => setIsAnalyticsOpen(false)}
-                />
+                <Suspense fallback={null}>
+                    {isAnalyticsOpen && (
+                        <AnalyticsPanel 
+                            trajectories={trajectories}
+                            energyData={energyData}
+                            currentTimeRef={currentTimeRef}
+                            isVisible={isAnalyticsOpen}
+                            onClose={() => setIsAnalyticsOpen(false)}
+                        />
+                    )}
+                </Suspense>
 
                 {/* 骨架屏 - 在数据加载完成前显示 */}
                 {isLoadingCity && (

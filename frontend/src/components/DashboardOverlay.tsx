@@ -3,9 +3,20 @@ import RightControlPanel from './RightControlPanel';
 
 interface Props {
     onOpenAnalytics: () => void;
+    currentCity?: string;
 }
 
-export default function DashboardOverlay({ onOpenAnalytics }: Props) {
+/** 城市名映射 */
+const CITY_LABEL_MAP: Record<string, string> = {
+    shenzhen: '深圳南山运营控制中心',
+    beijing: '北京核心运营控制中心',
+    shanghai: '上海核心运营控制中心',
+    guangzhou: '广州核心运营控制中心',
+    chengdu: '成都核心运营控制中心',
+    chongqing: '重庆主城运营控制中心',
+};
+
+export default function DashboardOverlay({ onOpenAnalytics, currentCity = 'shenzhen' }: Props) {
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 p-6 font-sans">
             <RightControlPanel />
@@ -38,7 +49,7 @@ export default function DashboardOverlay({ onOpenAnalytics }: Props) {
                         </div>
                     </div>
                     <p className="text-slate-600 text-xs font-medium tracking-wider" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.8)' }}>
-                        深圳南山运营控制中心
+                        {CITY_LABEL_MAP[currentCity] || '运营控制中心'}
                     </p>
                 </div>
                 <div className="h-px w-full bg-gradient-to-r from-slate-300 via-slate-200 to-transparent relative z-10"></div>

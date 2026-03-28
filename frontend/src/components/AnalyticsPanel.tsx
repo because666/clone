@@ -42,7 +42,7 @@ export default function AnalyticsPanel({
                             <div className="bg-white/40 backdrop-blur-md rounded-2xl px-4 py-2 border border-white/60 shadow-sm flex items-center gap-3 relative overflow-hidden">
                                 <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest relative z-10">当前运行负荷</span>
                                 <span className="text-2xl font-black text-indigo-600 relative z-10 drop-shadow-sm">
-                                    {Object.keys(energyData || {}).length > 0 ? Math.min(100, (trajectories.length / 1500) * 100).toFixed(1) : '0.0'}%
+                                    {Object.keys(energyData || {}).length > 0 ? Math.min(100, (trajectories.length / Math.max(trajectories.length, 500)) * 100).toFixed(1) : '0.0'}%
                                 </span>
                             </div>
                         </div>

@@ -8,6 +8,7 @@ import type { CityData, UAVPath } from '../types/map';
 import type { StepItem } from '../features/LoadingProgress/StepProgress';
 import { retryWithBackoff } from '../utils/helpers';
 import { LRUCache } from '../utils/cache';
+import { fetchJsonWithWorker } from '../utils/workerFetch';
 
 export interface LoadingError {
     step: string;
@@ -164,13 +165,8 @@ export function useCityData(): UseCityDataReturn {
                     throw new DOMException('请求已取消', 'AbortError');
                 }
 
-                const response = await fetch(url, { signal });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                return response.json() as Promise<T>;
+                // 【性能优化】使用 Worker 线程解析大型 JSON，避免主线程阻塞
+                return fetchJsonWithWorker<T>(url, signal);
             }, maxRetries, baseDelay);
 
             updateSteps(stepId, 'completed');

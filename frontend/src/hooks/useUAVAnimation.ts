@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
 import { updateActiveUAVsBuffer, formatElapsed, uavModelBuffer, getActiveUAVs } from '../utils/animation';
+import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 
 const ANIMATION_SPEED = 0.016;
 // 告警分发帧切片数量：将一秒内的巨量计算平摊到 60 帧中完成，解决突发掉帧
@@ -25,12 +26,6 @@ function fastDistSq(lon1: number, lat1: number, lon2: number, lat2: number): num
     return dx * dx + dy * dy;
 }
 
-/** 风速影响因子 */
-function calcWindFactor(windSpeed: number): number {
-    const d = windSpeed - 3;
-    return 1 + 0.03 * d * d;
-}
-
 export function useUAVAnimation(
     trajectories: UAVPath[],
     timeRangeRef: React.MutableRefObject<{ min: number; max: number }>,
@@ -47,6 +42,13 @@ export function useUAVAnimation(
 
     const [isPlaying, setIsPlaying] = useState(true);
     const [animationSpeed, setAnimationSpeed] = useState(1);
+
+    // 【性能优化】用 ref 同步跟踪 state，使 animate 回调无需依赖变化的 state 值
+    // 这样 animate 回调保持稳定引用，不会因为播放/倍速切换而重建 → 消除 RAF 中断闪烁
+    const isPlayingRef = useRef(isPlaying);
+    useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+    const animSpeedRef = useRef(animationSpeed);
+    useEffect(() => { animSpeedRef.current = animationSpeed; }, [animationSpeed]);
     const animFrameRef = useRef<number>(0);
 
     const progressBarRef = useRef<HTMLDivElement>(null);
@@ -122,11 +124,21 @@ export function useUAVAnimation(
         }
     }, []);
 
+    // 缓存 energyData/windSpeed/pushAlert 到 ref，供 animate 帧循环中稳定读取
+    const energyDataRef = useRef(energyData);
+    useEffect(() => { energyDataRef.current = energyData; }, [energyData]);
+    const windSpeedRef = useRef(windSpeed);
+    useEffect(() => { windSpeedRef.current = windSpeed; }, [windSpeed]);
+    const pushAlertRef = useRef(pushAlert);
+    useEffect(() => { pushAlertRef.current = pushAlert; }, [pushAlert]);
+
     // ---- 告警检测逻辑（使用时间切片优化） ----
     const checkAlerts = useCallback((currentTime: number, currentFrame: number) => {
-        if (!pushAlert || !energyData) return;
+        const currentPushAlert = pushAlertRef.current;
+        const currentEnergyData = energyDataRef.current;
+        if (!currentPushAlert || !currentEnergyData) return;
 
-        const wf = calcWindFactor(windSpeed ?? 3);
+        const wf = calcWindFactor(windSpeedRef.current ?? 3);
         const sensitivePoints = sensitivePointsRef.current;
         
         // Time Slicing: 把 O(M*N) 的全量计算平摊。当前帧只处理索引满足条件的无人机
@@ -137,28 +149,17 @@ export function useUAVAnimation(
             if (!uav.isActive || !uav.trajectory) continue;
 
             const flightId = uav.trajectory.id;
-            const ed = energyData[flightId];
+            const ed = currentEnergyData[flightId];
 
-            // ① 低电量检测
+            // ① 低电量检测（使用公共二分搜索）
             if (ed?.battery && ed.battery.length > 0) {
                 const timestamps = uav.trajectory.timestamps;
-                let left = 0;
-                let right = timestamps.length - 1;
-                let idx = right;
-                while (left <= right) {
-                    const mid = (left + right) >> 1;
-                    if (timestamps[mid] >= currentTime) {
-                        idx = mid;
-                        right = mid - 1;
-                    } else {
-                        left = mid + 1;
-                    }
-                }
+                const idx = binarySearchTimestamp(timestamps, currentTime);
                 const startBat = ed.battery[0];
                 const rawBat = ed.battery[idx];
                 const adjustedBat = Math.max(0, startBat - (startBat - rawBat) * wf);
                 if (adjustedBat < 20 && adjustedBat > 0) {
-                    pushAlert(
+                    currentPushAlert(
                         'low-battery',
                         flightId,
                         `无人机 ${flightId} 电量过低 (${adjustedBat.toFixed(1)}%)，存在坠落风险，请立即介入。`
@@ -179,7 +180,7 @@ export function useUAVAnimation(
                     if (distSq < radius * radius) {
                         const poiName = poi.properties?.name || category;
                         const dist = Math.sqrt(distSq); // 仅触发时才花性能算真实距离
-                        pushAlert(
+                        currentPushAlert(
                             'danger-zone',
                             flightId,
                             `无人机 ${flightId} 已进入 ${poiName} 限制空域（距中心 ${Math.round(dist)}m），请立即调度绕行。`
@@ -189,7 +190,7 @@ export function useUAVAnimation(
                 }
             }
         }
-    }, [energyData, windSpeed, pushAlert]);
+    }, []); // 稳定回调：所有外部依赖已通过 ref 读取
 
     const animate = useCallback(() => {
         if (timeRangeRef.current.max === 0) {
@@ -198,8 +199,9 @@ export function useUAVAnimation(
         }
 
         let next = currentTimeRef.current;
-        if (isPlaying) {
-            next += ANIMATION_SPEED * animationSpeed;
+        // 【性能优化】从 ref 读取播放状态，避免 animate 依赖 isPlaying state
+        if (isPlayingRef.current) {
+            next += ANIMATION_SPEED * animSpeedRef.current;
             if (next > timeRangeRef.current.max) next = 0;
             currentTimeRef.current = next;
         }
@@ -243,16 +245,16 @@ export function useUAVAnimation(
         checkAlerts(next, alertFrameCounter.current);
 
         animFrameRef.current = requestAnimationFrame(animate);
-    }, [animationSpeed, updateDashboardDOM, isPlaying, timeRangeRef, currentTimeRef, deckRef, checkAlerts]);
+    }, [updateDashboardDOM, timeRangeRef, currentTimeRef, deckRef, checkAlerts]);
+    // 【性能优化】移除 isPlaying 和 animationSpeed 依赖 →  animate 回调保持稳定引用
 
+    // RAF 循环始终运行（由内部 isPlayingRef 控制是否推进时间），避免频繁注销/重注册
     useEffect(() => {
-        if (isPlaying) {
-            animFrameRef.current = requestAnimationFrame(animate);
-        }
+        animFrameRef.current = requestAnimationFrame(animate);
         return () => {
             if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
         };
-    }, [isPlaying, animate]);
+    }, [animate]);
 
     const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         const rect = e.currentTarget.getBoundingClientRect();
