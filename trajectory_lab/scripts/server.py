@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
-    from flask import Flask, request, jsonify, send_from_directory
+    from flask import Flask, request, jsonify, send_from_directory, Response
     from flask_cors import CORS
     from flask_compress import Compress
     import jwt
@@ -26,7 +26,7 @@ except ImportError:
     print("缺少依赖，请运行: pip install flask flask-cors flask-compress pyjwt")
     sys.exit(1)
 
-from trajectory_lab.models.user import db, User, AuditLog
+from trajectory_lab.models.user import db, User, AuditLog, Task
 
 from trajectory_lab.core.poi_loader import load_city_pois
 from trajectory_lab.core.planner import plan
@@ -85,6 +85,8 @@ def role_required(*allowed_roles):
         @wraps(f)
         def verify_token(*args, **kwargs):
             token = request.headers.get('Authorization', '').replace('Bearer ', '')
+            if not token:
+                token = request.args.get('token', '') # 支持 EventSource 等无法设置Header的场景
             if not token:
                 return jsonify({"error": "缺少鉴权 Token"}), 401
             try:
@@ -375,6 +377,164 @@ def single_generate():
             "timestamps": result.timestamps,
         }
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Task Management (航线任务调度管理)
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route("/api/tasks", methods=["POST"])
+@role_required('ADMIN', 'DISPATCHER', 'VIEWER')
+def create_task():
+    body = request.get_json(force=True, silent=True) or {}
+    city = body.get("city", "shenzhen")
+    start_lat = float(body.get("from_lat", 0))
+    start_lon = float(body.get("from_lon", 0))
+    start_poi_id = body.get("from_id", "")
+    end_lat = float(body.get("to_lat", 0))
+    end_lon = float(body.get("to_lon", 0))
+    end_poi_id = body.get("to_id", "")
+
+    if start_lat == 0 and start_lon == 0:
+        return jsonify({"error": "Missing start coordinates"}), 400
+    if end_lat == 0 and end_lon == 0:
+        return jsonify({"error": "Missing end coordinates"}), 400
+
+    try:
+        city_pois = get_city_pois(city, 0)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+
+    nfz = city_pois.nfz_index
+    if nfz.point_in_any(start_lat, start_lon, 0):
+        return jsonify({"error": f"起点 ({start_lat},{start_lon}) 在禁飞区内"}), 400
+    if nfz.point_in_any(end_lat, end_lon, 0):
+        return jsonify({"error": f"终点 ({end_lat},{end_lon}) 在禁飞区内"}), 400
+
+    fid = f"task_{int(time.time())}"
+    # 调用核心算法生成轨迹
+    result = plan(
+        start_lat, start_lon, end_lat, end_lon,
+        nfz_index=nfz, city=city, flight_id=fid,
+        from_poi_id=start_poi_id, to_poi_id=end_poi_id,
+    )
+
+    traj_dict = {
+        "id": result.flight_id,
+        "path": result.path,
+        "timestamps": result.timestamps,
+    }
+
+    user_id = request.user['sub']
+
+    new_task = Task(
+        city=city,
+        flight_id=fid,
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
+        start_poi_id=start_poi_id,
+        end_poi_id=end_poi_id,
+        status='PENDING',
+        trajectory_data=json.dumps(traj_dict),
+        creator_id=user_id
+    )
+
+    db.session.add(new_task)
+    db.session.commit()
+    
+    log_audit("CREATE_TASK", resource="tasks", details={"task_id": new_task.id, "flight_id": fid})
+
+    return jsonify({"ok": True, "task_id": new_task.id, "status": new_task.status, "message": "Mission created and pending approval"})
+
+@app.route("/api/tasks", methods=["GET"])
+@role_required('ADMIN', 'DISPATCHER', 'VIEWER')
+def list_tasks():
+    status_filter = request.args.get('status')
+    query = Task.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    
+    tasks = query.order_by(Task.created_at.desc()).all()
+    
+    result = []
+    # 批量获取用户信息
+    user_ids = {t.creator_id for t in tasks if t.creator_id}
+    users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+
+    for t in tasks:
+        creator = users.get(t.creator_id)
+        result.append({
+            "id": t.id,
+            "city": t.city,
+            "flight_id": t.flight_id,
+            "start_lat": t.start_lat,
+            "start_lon": t.start_lon,
+            "end_lat": t.end_lat,
+            "end_lon": t.end_lon,
+            "start_poi_id": t.start_poi_id,
+            "end_poi_id": t.end_poi_id,
+            "status": t.status,
+            "trajectory_data": json.loads(t.trajectory_data) if t.trajectory_data else None,
+            "creator_username": creator.username if creator else 'Unknown',
+            "created_at": t.created_at.isoformat(),
+            "updated_at": t.updated_at.isoformat()
+        })
+
+    return jsonify({"ok": True, "tasks": result})
+
+
+@app.route("/api/tasks/stream", methods=["GET"])
+@role_required('ADMIN', 'DISPATCHER', 'VIEWER')
+def tasks_stream():
+    """Server-Sent Events 实时任务变更推送"""
+    def generate():
+        last_updated = None
+        while True:
+            try:
+                # 注意：SQLite + SQLAlchemy 在多线程长连接下可能发生 Session 隔离，
+                # 每秒重建连接不优雅，但为了保证 SSE 单测展示的绝对实时性，我们通过独立的 DB Session 直接查最近一次的更新时间
+                with app.app_context():
+                    latest_task = Task.query.order_by(Task.updated_at.desc()).first()
+                    current_time = latest_task.updated_at.isoformat() if latest_task else "none"
+
+                if last_updated is None:
+                    last_updated = current_time # 刚连上不触发刷新
+                elif current_time != last_updated:
+                    last_updated = current_time
+                    yield f"data: update\n\n"
+            
+            except Exception as e:
+                logger.error(f"SSE流出错了: {e}")
+                
+            time.sleep(1.0)
+            
+    return Response(generate(), mimetype="text/event-stream", headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    })
+
+
+@app.route("/api/tasks/<task_id>/status", methods=["PUT"])
+@role_required('ADMIN', 'DISPATCHER')
+def update_task_status(task_id):
+    body = request.get_json(force=True, silent=True) or {}
+    new_status = body.get("status")
+    if not new_status in ['PENDING', 'APPROVED', 'EXECUTING', 'COMPLETED', 'REJECTED']:
+        return jsonify({"error": "Invalid status"}), 400
+
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+
+    task.status = new_status
+    db.session.commit()
+
+    log_audit("UPDATE_TASK_STATUS", resource="tasks", details={"task_id": task.id, "new_status": new_status})
+
+    return jsonify({"ok": True, "task_id": task.id, "status": task.status})
 
 
 # ═══════════════════════════════════════════════════════════════════════

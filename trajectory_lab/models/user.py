@@ -30,3 +30,19 @@ class AuditLog(db.Model):
     ip_address = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Task(db.Model):
+    __tablename__ = 'tasks'
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    city = db.Column(db.String(50), nullable=False, default='shenzhen')
+    flight_id = db.Column(db.String(100), nullable=True)
+    start_lat = db.Column(db.Float, nullable=False)
+    start_lon = db.Column(db.Float, nullable=False)
+    end_lat = db.Column(db.Float, nullable=False)
+    end_lon = db.Column(db.Float, nullable=False)
+    start_poi_id = db.Column(db.String(50), nullable=True)
+    end_poi_id = db.Column(db.String(50), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='PENDING') # PENDING, APPROVED, EXECUTING, COMPLETED, REJECTED
+    trajectory_data = db.Column(db.Text, nullable=True) # JSON string
+    creator_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

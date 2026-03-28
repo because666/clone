@@ -41,7 +41,8 @@ export function useUAVAnimation(
     energyData?: any,
     poiSensitive?: any,
     windSpeed?: number,
-    pushAlert?: (type: 'low-battery' | 'danger-zone', flightId: string, message: string) => void
+    pushAlert?: (type: 'low-battery' | 'danger-zone', flightId: string, message: string) => void,
+    trackingStateRef?: React.MutableRefObject<{ isTracking: boolean, lockedFlight: any | null }>
 ) {
     const trajectoriesRef = useRef<UAVPath[]>([]);
     useEffect(() => { trajectoriesRef.current = trajectories; }, [trajectories]);
@@ -210,6 +211,7 @@ export function useUAVAnimation(
         }
 
         let next = currentTimeRef.current;
+        
         // 【性能优化】从 ref 读取播放状态，避免 animate 依赖 isPlaying state
         if (isPlayingRef.current) {
             next += ANIMATION_SPEED * animSpeedRef.current;
@@ -219,11 +221,16 @@ export function useUAVAnimation(
 
         const deck = deckRef.current?.deck;
         if (deck) {
-            const currentLayers = deck.props.layers;
+            const currentLayers = deck.props.layers || [];
             const updatedLayers = currentLayers.map((layer: any) => {
                 if (layer?.id === 'uav-active-tail-layer') {
                     return layer.clone({
                         currentTime: next
+                    });
+                }
+                if (layer?.id === 'selected-uav-layer') {
+                    return layer.clone({
+                        updateTriggers: { getPosition: next }
                     });
                 }
                 if (layer?.id === 'uav-model-layer' || layer?.id === 'uav-point-layer') {
@@ -231,10 +238,6 @@ export function useUAVAnimation(
                     updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max);
                     const isModel = layer.id === 'uav-model-layer';
                     
-                    // 利用 deck.gl 的 clone 方法重用大部分现有图层资源。
-                    // -> 对于 ScatterPoint (点图层)：Deck.gl 原生支持 3 维 Binary Attributes 格式输入。
-                    // -> 对于 Scenegraph (模型图层)：Deck.gl 内部会在 CPU 计算出 16 维矩阵，因此不暴露 attributes 输入接口，
-                    //    我们利用 Deck.gl 的 Accessor 在访问坐标时直接返回 Buffer 内的映射，从而仍能维持零分配并更新到模型层。
                     return layer.clone(isModel ? {
                         data: { length: activeUAVCount },
                         updateTriggers: { getPosition: next, getOrientation: next }
@@ -248,7 +251,40 @@ export function useUAVAnimation(
                 }
                 return layer;
             });
-            deck.setProps({ layers: updatedLayers });
+            
+            let nextViewState = undefined;
+            // 【电影级运镜】硬锁定跟拍逻辑：在 RAF 级别直接架空 React 接管相机坐标
+            if (trackingStateRef && trackingStateRef.current.isTracking && trackingStateRef.current.lockedFlight) {
+                const flight = trackingStateRef.current.lockedFlight;
+                const ft = flight.timestamps;
+                const idx = binarySearchTimestamp(ft, next);
+                let lon, lat;
+                if (idx > 0 && idx < ft.length) {
+                    const t0 = ft[idx - 1], t1 = ft[idx];
+                    const p0 = flight.path[idx - 1], p1 = flight.path[idx];
+                    const ratio = (next - t0) / (t1 - t0);
+                    lon = p0[0] + (p1[0] - p0[0]) * ratio;
+                    lat = p0[1] + (p1[1] - p0[1]) * ratio;
+                } else if (idx <= 0) {
+                    lon = flight.path[0][0]; lat = flight.path[0][1];
+                } else {
+                    lon = flight.path[flight.path.length-1][0]; lat = flight.path[flight.path.length-1][1];
+                }
+                if (lon !== undefined && lat !== undefined && deck.props.viewState) {
+                    nextViewState = {
+                        ...deck.props.viewState,
+                        longitude: lon,
+                        latitude: lat,
+                        transitionDuration: 0 // 每一帧强制覆盖位置，切勿套用补间动画以免拉扯
+                    };
+                }
+            }
+            
+            if (nextViewState) {
+                deck.setProps({ layers: updatedLayers, viewState: nextViewState });
+            } else {
+                deck.setProps({ layers: updatedLayers });
+            }
         }
 
         if (progressBarRef.current) {
@@ -299,6 +335,11 @@ export function useUAVAnimation(
                 if (layer?.id === 'uav-active-tail-layer') {
                     return layer.clone({
                         currentTime: currentTimeRef.current
+                    });
+                }
+                if (layer?.id === 'selected-uav-layer') {
+                    return layer.clone({
+                        updateTriggers: { getPosition: currentTimeRef.current }
                     });
                 }
                 if (layer?.id === 'uav-model-layer' || layer?.id === 'uav-point-layer') {
