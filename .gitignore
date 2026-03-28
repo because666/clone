@@ -9,3 +9,7 @@ data/processed/trajectories/*
 
 !frontend/public/data/processed/trajectories/shenzhen_uav_trajectories.json
 __pycache__/
+
+# Flask SQLite database
+instance/
+*.db
