@@ -1,16 +1,19 @@
 <div align="center">
   <!-- 项目专属 Logo (已缩放至最佳展示尺寸) -->
-  <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="120" />
+  <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="90" />
 
   <h1> AetherWeave | 苍穹织网 </h1>
   <p><strong>面向未来城市的低空物流 3D 实时调度与监控中枢</strong></p>
 
-  <!-- 💡 占位符：各类状态徽章，可以根据实际情况在 shields.io 调整 -->
+  <!-- 💡 核心技术栈状态徽章 -->
   <p>
     <img src="https://img.shields.io/badge/前端-React_18-61DAFB?logo=react&logoColor=white" alt="React" />
+    <img src="https://img.shields.io/badge/语言-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
     <img src="https://img.shields.io/badge/渲染引擎-Deck.gl-FFF?logo=uber" alt="Deck.gl" />
+    <img src="https://img.shields.io/badge/地图底座-Mapbox-000000?logo=mapbox&logoColor=white" alt="Mapbox" />
     <img src="https://img.shields.io/badge/后端调度-FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI" />
-    <img src="https://img.shields.io/badge/数据流-SSE-FF4500" alt="SSE" />
+    <img src="https://img.shields.io/badge/存储-SQLite_持久化-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+    <img src="https://img.shields.io/badge/算法-A*_避障-FF9800" alt="Algorithm" />
     <img src="https://img.shields.io/badge/License-MIT-blue" alt="License" />
   </p>
 
