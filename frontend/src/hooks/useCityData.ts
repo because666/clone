@@ -8,6 +8,7 @@ import type { CityData, UAVPath } from '../types/map';
 import type { StepItem } from '../features/LoadingProgress/StepProgress';
 import { retryWithBackoff } from '../utils/helpers';
 import { LRUCache } from '../utils/cache';
+import { fetchJsonWithWorker } from '../utils/workerFetch';
 
 export interface LoadingError {
     step: string;
@@ -28,7 +29,7 @@ interface UseCityDataReturn {
     currentTimeRef: React.MutableRefObject<number>;
     currentCityRef: React.MutableRefObject<string>;
     loadCityData: (city: string, onFlightClear?: () => void) => Promise<void>;
-    reloadCurrentTrajectories: () => Promise<void>;
+    reloadCurrentTrajectories: () => Promise<UAVPath[]>;
     setTrajectories: React.Dispatch<React.SetStateAction<UAVPath[]>>;
     clearError: () => void;
 }
@@ -164,13 +165,8 @@ export function useCityData(): UseCityDataReturn {
                     throw new DOMException('请求已取消', 'AbortError');
                 }
 
-                const response = await fetch(url, { signal });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                return response.json() as Promise<T>;
+                // 【性能优化】使用 Worker 线程解析大型 JSON，避免主线程阻塞
+                return fetchJsonWithWorker<T>(url, signal);
             }, maxRetries, baseDelay);
 
             updateSteps(stepId, 'completed');
@@ -274,7 +270,7 @@ export function useCityData(): UseCityDataReturn {
                             trajectories: UAVPath[];
                             timeRange: { min: number; max: number };
                         }>(
-                            `/data/processed/trajectories/${city}_uav_trajectories.json`,
+                            `/api/trajectories?city=${city}`,
                             'trajectories',
                             signal
                         );
@@ -368,25 +364,27 @@ export function useCityData(): UseCityDataReturn {
     /**
      * 重新加载当前城市的轨迹数据
      */
-    const reloadCurrentTrajectories = useCallback(async () => {
+    const reloadCurrentTrajectories = useCallback(async (): Promise<UAVPath[]> => {
         const city = currentCityRef.current;
         try {
-            const tRes = await fetch(`/data/processed/trajectories/${city}_uav_trajectories.json`)
+            const tRes = await fetch(`/api/trajectories?city=${city}`)
                 .then(r => r.ok ? r.json() : null).catch(() => null);
             if (tRes) {
                 const newTrajs = tRes.trajectories || [];
                 setTrajectories(newTrajs);
                 timeRangeRef.current = tRes.timeRange || { min: 0, max: 0 };
-                currentTimeRef.current = 0;
+                // 移除 currentTimeRef.current = 0，从而不再打断其他处于飞行中状态的无人机！
                 const cached = dataCacheRef.current.get(city);
                 if (cached) {
                     cached.trajectories = newTrajs;
                     cached.timeRange = tRes.timeRange || { min: 0, max: 0 };
                 }
+                return newTrajs;
             }
         } catch (e) {
             console.error('热重载轨迹失败', e);
         }
+        return [];
     }, []);
 
     return {

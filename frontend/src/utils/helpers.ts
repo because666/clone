@@ -232,26 +232,12 @@ export function generateId(prefix: string = 'id'): string {
 
 /**
  * 深拷贝对象
+ * 使用浏览器原生 structuredClone，正确处理 Date/Map/Set/循环引用等
  * @param obj - 要拷贝的对象
  * @returns 深拷贝后的对象
  */
 export function deepClone<T>(obj: T): T {
-    if (obj === null || typeof obj !== 'object') {
-        return obj;
-    }
-
-    if (Array.isArray(obj)) {
-        return obj.map(item => deepClone(item)) as T;
-    }
-
-    const cloned = {} as T;
-    for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            cloned[key] = deepClone(obj[key]);
-        }
-    }
-
-    return cloned;
+    return structuredClone(obj);
 }
 
 /**

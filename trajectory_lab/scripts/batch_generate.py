@@ -16,6 +16,7 @@ import random
 import logging
 import argparse
 import time
+import uuid
 import multiprocessing as mp
 from pathlib import Path
 
@@ -124,6 +125,7 @@ def main():
     parser.add_argument("--max-dist", type=float, default=8000.0, help="最长飞行距离（米，默认 8000）")
     parser.add_argument("--seed", type=int, default=42, help="随机种子（默认 42）")
     parser.add_argument("--buffer", type=float, default=0.0, help="demand 净化额外缓冲米（默认 0）")
+    parser.add_argument("--persist", action="store_true", help="同步写入数据库持久化（默认不开启）")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -173,8 +175,35 @@ def main():
         json.dump(data, f, separators=(",", ":"))
 
     size_kb = out_path.stat().st_size / 1024
+    logger.info(f"✅ JSON 输出: {out_path}  ({size_kb:.1f} KB)")
+
+    # 可选：同步写入数据库持久化
+    if args.persist:
+        from trajectory_lab.scripts.server import app
+        from trajectory_lab.models.user import db, FlightLog
+
+        batch_id = str(uuid.uuid4())
+        algo_name = data.get("_meta", {}).get("algo", "unknown")
+        with app.app_context():
+            FlightLog.query.filter_by(city=args.city).delete()
+            for traj_item in data["trajectories"]:
+                if traj_item["id"].endswith("_ghost"):
+                    continue
+                log = FlightLog(
+                    city=args.city,
+                    flight_id=traj_item["id"],
+                    path_data=json.dumps(traj_item["path"]),
+                    timestamps_data=json.dumps(traj_item["timestamps"]),
+                    start_offset=traj_item.get("start_offset", 0.0),
+                    algo=algo_name,
+                    batch_id=batch_id,
+                )
+                db.session.add(log)
+            db.session.commit()
+        logger.info(f"✅ 已持久化到数据库, batch_id={batch_id}")
+
     elapsed = time.time() - t0
-    logger.info(f"✅ 输出: {out_path}  ({size_kb:.1f} KB, 耗时 {elapsed:.1f}s)")
+    logger.info(f"✅ 总耗时: {elapsed:.1f}s")
 
 if __name__ == "__main__":
     # Windows 需要这个保护

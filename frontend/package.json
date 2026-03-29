@@ -14,15 +14,19 @@
     "@deck.gl/layers": "^9.2.9",
     "@deck.gl/react": "^9.2.9",
     "@fontsource/share-tech-mono": "^5.2.7",
+    "axios": "^1.13.6",
     "d3-fetch": "^3.0.1",
     "d3-interpolate": "^3.0.1",
     "deck.gl": "^9.2.9",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
     "lucide-react": "^0.575.0",
     "maplibre-gl": "^5.19.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-error-boundary": "^6.1.1",
-    "react-map-gl": "^8.1.0"
+    "react-map-gl": "^8.1.0",
+    "react-router-dom": "^7.13.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

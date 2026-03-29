@@ -51,7 +51,7 @@ export default function PlaybackControls({
                     )}
                 </button>
 
-                <div className="hidden flex-1 flex-col gap-2 relative z-10">
+                <div className="flex flex-1 flex-col gap-2 relative z-10">
                     <div className="relative h-2.5 bg-black/5 rounded-full overflow-hidden cursor-pointer shadow-inner border border-white/30"
                         onClick={handleProgressClick}
                     >

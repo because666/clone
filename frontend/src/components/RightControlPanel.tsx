@@ -1,18 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { 
   Activity, ShieldAlert, Zap, Wind, Sun, Cloud, CloudRain, 
-  CloudSnow, CloudLightning, BatteryWarning, 
-  FlaskConical 
+  CloudSnow, CloudLightning, BatteryWarning
 } from 'lucide-react';
 import { useWindSpeed } from '../contexts/WindSpeedContext';
 import { useAlerts } from './AlertNotificationProvider';
 import { useWeather } from '../contexts/WeatherContext';
 import type { WeatherType } from '../contexts/WeatherContext';
-
-interface RightControlPanelProps {
-    onOpenAlgoLab: () => void;
-    hide?: boolean;
-}
 
 const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] = [
     { type: 'sunny', icon: <Sun size={14} />, label: '晴天' },
@@ -22,11 +16,11 @@ const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] =
     { type: 'hailing', icon: <CloudLightning size={14} />, label: '冰雹' },
 ];
 
-export default function RightControlPanel({ onOpenAlgoLab, hide = false }: RightControlPanelProps) {
+export default function RightControlPanel() {
     const { windSpeed, setWindSpeed } = useWindSpeed();
     const { alerts, totalCounts } = useAlerts();
     const { weather, setWeather, temperature, setTemperature } = useWeather();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
 
     const getWeatherIcon = () => {
         switch (weather) {
@@ -41,29 +35,26 @@ export default function RightControlPanel({ onOpenAlgoLab, hide = false }: Right
 
     const getWeatherLabel = () => WEATHER_OPTIONS.find(o => o.type === weather)?.label || '清晰';
 
-    // 处理面板折叠后的逻辑
-    const sidePanelOffset = hide ? 'translate-x-full opacity-0' : isCollapsed ? 'translate-x-[calc(100%-12px)]' : 'translate-x-0 opacity-100';
+    const sidePanelOffset = isCollapsed ? 'translate-x-[calc(100%-12px)]' : 'translate-x-0 opacity-100';
 
     return (
         <div className={`fixed top-0 right-0 h-full w-[360px] z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${sidePanelOffset}`}>
             
-            {/* 隐藏/显示触发拉手 - 强化增强 */}
-            {!hide && (
-                <button
-                    onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="absolute left-[-26px] top-1/2 -translate-y-1/2 w-10 h-24 bg-indigo-600/80 backdrop-blur-3xl border border-white/40 rounded-l-2xl pointer-events-auto flex items-center justify-center text-white hover:bg-indigo-500 transition-all group shadow-[-8px_0_24px_rgba(99,102,241,0.3)]"
-                    title={isCollapsed ? "展开面板" : "隐藏面板"}
-                >
-                    <div className={`flex flex-col items-center gap-1 transition-transform duration-500 ${isCollapsed ? 'rotate-180' : ''}`}>
-                        <Activity size={16} className="opacity-100" />
-                        <div className="w-1 h-8 bg-white/30 rounded-full" />
-                    </div>
-                </button>
-            )}
+            {/* 隐藏/显示触发拉手 */}
+            <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="absolute left-[-26px] top-1/2 -translate-y-1/2 w-10 h-24 bg-indigo-600/80 backdrop-blur-3xl border border-white/40 rounded-l-2xl pointer-events-auto flex items-center justify-center text-white hover:bg-indigo-500 transition-all group shadow-[-8px_0_24px_rgba(99,102,241,0.3)]"
+                title={isCollapsed ? "展开面板" : "隐藏面板"}
+            >
+                <div className={`flex flex-col items-center gap-1 transition-transform duration-500 ${isCollapsed ? 'rotate-180' : ''}`}>
+                    <Activity size={16} className="opacity-100" />
+                    <div className="w-1 h-8 bg-white/30 rounded-full" />
+                </div>
+            </button>
 
             <div className="h-full flex flex-col bg-white/40 backdrop-blur-2xl border-l border-white/50 shadow-[-8px_0_32px_0_rgba(31,38,135,0.15)] pointer-events-auto overflow-hidden">
                 
-                {/* 1. 顶部状态区域 (Telemetry) - 压缩高度 */}
+                {/* 1. 顶部状态区域 */}
                 <header className="px-6 pt-5 pb-4 border-b border-slate-200/50">
                     <h2 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">当前环境态势</h2>
                     <div className="grid grid-cols-3 gap-3">
@@ -85,7 +76,7 @@ export default function RightControlPanel({ onOpenAlgoLab, hide = false }: Right
                     </div>
                 </header>
 
-                {/* 2. 环境调节区域 (Controls) - 压缩高度与间距 */}
+                {/* 2. 环境调节区域 */}
                 <section className="px-6 py-4 border-b border-slate-200/50 scrollbar-hide">
                     <h2 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">环境调节</h2>
                     
@@ -141,25 +132,8 @@ export default function RightControlPanel({ onOpenAlgoLab, hide = false }: Right
                     </div>
                 </section>
 
-                {/* 3. 算法入口按钮 - 缩小并移除英文 */}
-                <section className="px-6 py-4">
-                    <button
-                        onClick={onOpenAlgoLab}
-                        className="group relative w-full overflow-hidden rounded-xl py-2.5 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-                        style={{
-                            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                            boxShadow: '0 4px 12px -2px rgba(99, 102, 241, 0.3)'
-                        }}
-                    >
-                        <div className="relative flex items-center justify-center gap-2">
-                            <FlaskConical size={14} className="text-white" />
-                            <span className="text-xs font-black text-white tracking-widest uppercase">算法调试</span>
-                        </div>
-                    </button>
-                </section>
-
-                {/* 4. 安全事件预警 (底部集成) */}
-                <section className="flex-1 px-6 pt-2 flex flex-col min-h-0">
+                {/* 3. 安全事件预警 */}
+                <section className="flex-1 px-6 pt-4 flex flex-col min-h-0">
                     <div className="mb-4 flex justify-between items-center">
                         <div className="flex items-center gap-2">
                              <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">安全事件预警</h2>

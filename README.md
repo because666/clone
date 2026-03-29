@@ -1,57 +1,193 @@
-# 城市低空物流基建规划与运行监控可视化平台
+<div align="center">
+  <!-- 项目专属 Logo (已缩放至最佳展示尺寸) -->
+  <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="90" />
 
-## 一、 项目背景与目标
+  <h1> AetherWeave | 苍穹织网 </h1>
+  <p><strong>面向未来城市的低空物流 3D 实时调度与监控中枢</strong></p>
 
-随着低空经济的发展，城市低空交通的商业化加速。本项目旨在解决低空无人机在复杂城市环境下的运行监控与合规审查痛点，构建一套基于真实数据的“城市低空空域态势感知与能耗审查可视化平台”。
+  <!-- 💡 核心技术栈状态徽章 -->
+  <p>
+    <img src="https://img.shields.io/badge/前端-React_18-61DAFB?logo=react&logoColor=white" alt="React" />
+    <img src="https://img.shields.io/badge/语言-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/渲染引擎-Deck.gl-FFF?logo=uber" alt="Deck.gl" />
+    <img src="https://img.shields.io/badge/地图底座-Mapbox-000000?logo=mapbox&logoColor=white" alt="Mapbox" />
+    <img src="https://img.shields.io/badge/后端调度-FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/存储-SQLite_持久化-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
+    <img src="https://img.shields.io/badge/算法-A*_避障-FF9800" alt="Algorithm" />
+    <img src="https://img.shields.io/badge/License-MIT-blue" alt="License" />
+  </p>
 
-相比于传统的二维飞行监控，本项目强调在三维城市模型中进行高保真渲染，结合考虑避障和物理能耗的飞行轨迹生成仿真，为低空基建规划、航线审批与日常运行提供真实可靠的数据参考。
+  <p>
+    <a href="#-核心特性">核心特性</a> •
+    <a href="#-视觉震撼">视觉演示</a> •
+    <a href="#-系统架构">架构解析</a> •
+    <a href="#-快速上手">快速上手</a>
+  </p>
+</div>
 
----
+<br>
 
-## 二、 数据来源与处理逻辑
+**苍穹织网 (AetherWeave)** 是一个应用于城市低空物流网络的监控与可视化调度平台。项目基于 WebGL 渲染管线与 SSE 实时数据流架构，实现了对多并发无人机（UAV）轨迹的三维追踪、风险预警以及运力调度。
 
-项目摒弃随机伪造数据，全链路基于真实数据及其衍生逻辑：
-
-1.  **三维城市地理底座**：基于 OpenStreetMap (OSM) 获取真实建筑轮廓与高度，建立三维数字模型。提取学校、医院等噪音敏感点和高风险点，以此构建物理与非物理禁飞区（No-Fly Zones）及缓冲区。
-2.  **合规配送需求点挖掘**：过滤被禁飞区覆盖的商业和居民 POI（兴趣点），仅保留合法起降点，确保生成的物流需求具有现实可执行性。
-3.  **飞行轨迹与能耗动态仿真**：基于后端的 A* 三维空间避障寻路算法，生成符合避开禁飞区和物理碰撞规律的动态飞行轨迹。同时，根据飞行里程、高低起伏及无人机载荷，实时测算动态电池消耗率。
-
----
-
-## 三、 核心实现模块
-
-1.  **三维航线空间安全合规与智能避障**
-    -   系统在后端生成航线前进行 3D 地理相交计算。
-    -   遇到禁飞区（如方圆 300 米的学校预警圈）自动触发绕行和高度校正。
-    -   前端 3D 可视化展现航线的智能规避过程。
-
-2.  **城市空域全局监控态势大屏**
-    -   全局管理驾驶舱视角，实时统计当前空域负载率与累计航班数。
-    -   提供时间播放控制（播放轴与倍速调节），复盘展现城市上空无人机流量分布态势。
-
-3.  **单机高精特征档案与能耗监视**
-    -   允许交互式点选正在飞行的任意无人机，弹出详情雷达面板（Profile）。
-    -   实时同步该架无人机的飞行状态，直观展现载重（Payload）、电池剩余流失率等能耗指征，为异常告警（如高耗电跌落风险）提供监控窗口。
+本系统包含 3D 大屏态势感知、A* 三维空间避障规划、全链路审批节点以及后台数据分析等核心模块，可为低空经济领域的基建规划及日常运营提供直观的技术验证和决策辅助。
 
 ---
 
-## 四、 技术架构选型
+## 👁‍🗨 视觉
 
-项目采用前后端完全分离架构，侧重“重渲染、高并发查阅”。
+<div align="center">
+  <!-- 核心大屏调度全景 -->
+  <video src="https://github.com/user-attachments/assets/e57a241b-572e-4588-a407-b7da5a08baae" autoplay loop muted playsinline style="width: 100%;"></video>
+</div>
 
-1.  **前端 3D 可视化 (`React 18` + `Vite` + `Deck.gl`)**
-    -   借助 Uber 开源的 Deck.gl 及 MapLibre，实现百万级 GPU 加速的多边形光影渲染。
-    -   使用自定义 Hooks 对核心动画时序 (`useUAVAnimation`) 控制和数据缓存抽象解耦，保障大屏监控高帧率（60FPS）。
+<br>
 
-2.  **后端仿真数据服务 (`Python` + `FastAPI`/`Flask`)**
-    -   提供 RESTful API，承接前端请求。
-    -   包含独立的 `trajectory_lab` 处理模块，利用地理几何计算库（如 `Shapely`）进行建筑点过滤和高并发飞行轨迹及能耗时序生成。
+<div align="center">
+  <table>
+    <tr>
+      <!-- 模块 1：高潮追踪录屏 -->
+      <td align="center">
+        <video src="https://github.com/user-attachments/assets/20f0dbe0-786d-4130-bfa8-233cb6e646d7" autoplay loop muted playsinline style="width: 100%;"></video><br/>
+        <b>👆 镜头绑定与单机深度追踪</b><br/>
+        <sub>锁定高危隐患航班，同步呈现三维历史航线与到点预估时间</sub>
+      </td>
+      <!-- 模块 2：AI 面板（等待开发） -->
+      <td align="center">
+        <img src="https://via.placeholder.com/600x380/1e293b/0ea5e9?text=[+WIP+]+AI+Dispatch+Module" alt="自然语言指令调度(研发中)"/><br/>
+        <b>👆 🚧 预留：AI 智能体大模型联控台</b><br/>
+        <sub>解析模糊自然语言意图，触发底盘秒级空域避障调度重播</sub>
+      </td>
+    </tr>
+  </table>
+</div>
+
+## ✨ 特性与功能
+
+- 🚀 **高密度三维渲染**: 采用 `Deck.gl` 的 Binary 渲染模式与自定义 `TypedArray` 限制内存分配频率，减少 GC 卡顿。配合 LOD 优化限制不可见区域开销，系统可稳定支持 500+ 架并发 UAV 和 10 万+ 轨迹节点的高帧率大屏渲染。
+- 🧠 **三维动态避障与寻路**: 后端算法应用 0.0005° 精度网格进行空间建模和线段碰撞检测，实现规避真实建筑群与多边形禁飞区的三维航线规划，支持动态地形高程匹配与路径点平滑过滤。
+- ⚡️ **全链路流式调度推送**: 建立后端请求鉴权与状态机流转。通过 `FastAPI` 搭载 Server-Sent Events (SSE) 协议向下游大盘推送状态流，单向高频数据结合前端双层缓冲区（Double Buffering）合并更新，减少频繁的 DOM 重绘开销。
+- 🛡 **环境仿真与异常预警**: 系统集成气温、多种天气及风场等仿真参数联动模型。无人机航线与划定禁飞区产生空间交集，或受气温载重影响导致续航电量不足时，系统会自动计算剩余余量并在界面生成 UI 预警标签。
+- 🔐 **权限隔离与持久化审查**: 采用 `JWT` 角色管控架构区分大盘展示与后台派发权限。核心业务流水、飞行轨迹点与操作者派送指令均实时写入 `SQLite/PostgreSQL` 数据库，保障记录不可篡改以备朔源审查。
+- 📊 **空域数据聚合与分析**: 内置基于 `ECharts` 构建的统计面板组件。聚合运行时间线内的派送状态等结构化数据，展示分时段起降热力分布、空域运力负载趋势与能耗使用统计，作为非实时情况判断的辅助。
+
+## 🏗 架构
+
+
+```mermaid
+flowchart TD
+    %% 样式表 (轻量工业风与柔和对比)
+    classDef frontend fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,rx:5px,color:#0D47A1
+    classDef middleware fill:#FFF3E0,stroke:#EF6C00,stroke-width:1.5px,rx:5px,color:#E65100
+    classDef backend fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,rx:5px,color:#1B5E20
+    classDef database fill:#ECEFF1,stroke:#455A64,stroke-width:1.5px,color:#263238
+
+    %% ============ 节点实体 ============
+    %% 前端层
+    UI[🖥️ 监控视图与 AI 调度台]:::frontend
+    Hook[📌 交互防抖与状态机]:::frontend
+    Pool[⚡ TypedArray 零分配缓冲]:::frontend
+    Render[🗺️ MapBox + Deck.gl 引擎]:::frontend
+
+    %% 服务网关层
+    API[🔌 FastAPI 核心业务 API]:::middleware
+    Push[📡 SSE 异步单向推送通道]:::middleware
+
+    %% 后端算法底座
+    Engine[🧠 中央空域调度与风控中枢]:::backend
+    Planner[📍 A* 动态避障与时空解算]:::backend
+    DB[(🗄️ PgSQL / SQLite 安全落盘)]:::database
+
+    %% ============ 系统分层图块 ============
+    subgraph Client ["「表现层」 大屏视界与高并发管控端"]
+        UI -.->|"动作拦截"| Hook
+        Pool ===>|"底层指针复用"| Render
+    end
+
+    subgraph Gateway ["「服务层」 读写分离分流网关"]
+        API
+        Push
+    end
+
+    subgraph Server ["「底座层」 时空算法引擎与预警研判"]
+        Engine <-->|"派单与调拨"| Planner
+        Planner <==>|"数据持久化"| DB
+    end
+
+    %% ============ 核心数据流转 ============
+    %% 1. 上行业务链路 (Action Flow)
+    Hook -- "REST 指令流" --> API
+    API -- "解包与鉴权" --> Engine
+
+    %% 2. 下行渲染心跳流 (Render Flow)
+    Engine =="时空全域状态同步"==> Push
+    Push =="流控合并注入免 GC 缓冲"==> Pool
+```
+
+## 🚀 快速上手
+
+### 1. 环境预检
+- **Node.js**: >= 18.0.0
+- **Python**: >= 3.10
+- *无需繁杂的环境变量，内置内存数据库模式供 Demo 极速体验*
+
+### 2. 部署运行
+
+**步骤一：启动后端服务**
+```bash
+git clone https://github.com/TengJiao33/AetherWeave.git
+cd AetherWeave
+
+# 推荐使用虚拟环境：
+python -m venv venv
+# 激活环境 (Windows 用户运行: .\venv\Scripts\activate)
+source venv/bin/activate
+
+cd backend
+# 安装依赖并启动
+pip install -r requirements.txt
+python main.py  
+# 后端服务已运行在 http://localhost:8000
+```
+
+**步骤二：启动前端大屏面板**
+```bash
+# 请开启全新的终端
+cd frontend
+npm install
+npm run dev     
+# 访问 http://localhost:3000 查看 3D 面板
+```
+
+## 📚 目录结构导览
+
+```text
+AetherWeave/
+├── frontend/             # 浏览器 3D 可视化端 (React + Typescript)
+│   ├── src/
+│   │   ├── components/   # UI 与 Deck.gl 图层组件
+│   │   ├── hooks/        # 数据流向与状态管理
+│   │   └── utils/        # ArrayBuffer 性能优化模块
+│   └── public/           # 静态纹理及数据存放
+├── backend/              # 实时调度引擎 (Python + FastAPI)
+│   ├── core/             # A* 空域避障及调度引擎计算
+│   └── api/              # SSE 推送路由与 HTTP API
+├── trajectory_lab/       # 算法脚本实验室 (用于生成和验证航线数据)
+└── docs/                 # 技术文档与架构说明
+```
+
+
+
+## 团队成员
+
+- **指导老师**：杨正益
+- **核心开发组**：应飞扬、邓博、谢丽欣、罗楚瑞
+
+## 📜 开源与法律声明
+
+本项目代码基于 [MIT License](./LICENSE) 协议发布。
+允许用于非商业和商业性质的学习与二次开发，但对于数据安全与实飞环境的使用，后果需自行承担。
 
 ---
-
-## 五、 项目核心优势
-
-1.  **务实的应用场景**：直击目前城市低空交通管理中的“合规审批难、空域监控弱”两项实际业务需求。
-2.  **物理级别的仿真生成**：抛弃两点一线的虚假动画展示，后置真实的建筑避障算法与能耗物理模型，保证演示逻辑的合理性。
-3.  **工业级视觉交互表现**：运用具有代差级优势的 Deck.gl 引擎，无论是 3D 地图光影还是自定义时序平滑动画，直观视觉体验与交互操作都远超传统大屏报表。
-4.  **架构精良与工程规范**：采用前后端分离范式，Hooks 抽离和组件拆分严谨。前端展示层与 Trajectory Lab 引擎明确划界，系统具备企业级架构雏形。
+<div align="center">
+  <sup>© 2026 AetherWeave Team. MIT Licensed.</sup>
+</div>

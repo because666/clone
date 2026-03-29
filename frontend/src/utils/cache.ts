@@ -18,7 +18,7 @@ interface LRUCacheOptions {
  * @template T 缓存值类型
  */
 export class LRUCache<T> {
-    private cache: Map<string, CacheEntry<T>>;
+    protected cache: Map<string, CacheEntry<T>>;
     private maxSize: number;
     private ttl?: number;
 
@@ -178,7 +178,7 @@ export class PersistentLRUCache<T> extends LRUCache<T> {
     private saveToStorage(): void {
         try {
             const entries = Array.from(this.keys()).map(key => {
-                const entry = (this as any).cache.get(key);
+                const entry = this.cache.get(key);
                 return [key, entry];
             });
             localStorage.setItem(this.storageKey, JSON.stringify(entries));

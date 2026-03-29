@@ -1,16 +1,11 @@
 import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 
 interface FlightDetailPanelProps {
     selectedFlight: any;
     energyData: any;
     currentTimeRef: React.MutableRefObject<number>;
     setSelectedFlight: (flight: any) => void;
-}
-
-/** 风速影响因子：以 3 m/s 为基准，偏离越大消耗越高 */
-function calcWindFactor(windSpeed: number): number {
-    const delta = windSpeed - 3;
-    return 1 + 0.03 * delta * delta;
 }
 
 export default function FlightDetailPanel({
@@ -43,8 +38,8 @@ export default function FlightDetailPanel({
                 {energyData && energyData[selectedFlight.id] ? (() => {
                     const ed = energyData[selectedFlight.id];
                     const timestamps = selectedFlight.timestamps;
-                    let idx = timestamps.findIndex((t: number) => t >= currentTimeRef.current);
-                    if (idx === -1) idx = timestamps.length - 1;
+                    // 【性能优化】使用 O(logN) 二分搜索替代 O(N) findIndex
+                    let idx = binarySearchTimestamp(timestamps, currentTimeRef.current);
                     if (idx < 0) idx = 0;
 
                     // 原始数据

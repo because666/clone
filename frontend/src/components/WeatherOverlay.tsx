@@ -6,14 +6,14 @@ export default function WeatherOverlay() {
     const { weather } = useWeather();
     const { windSpeed } = useWindSpeed();
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
+    // 【Bug 修复】用 ref 存储 animationFrameId，避免清理时捕获闭包旧值导致残留动画
+    const animFrameIdRef = useRef<number>(0);
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        let animationFrameId: number;
         let particles: any[] = [];
         const w = (canvas.width = window.innerWidth);
         const h = (canvas.height = window.innerHeight);
@@ -39,17 +39,49 @@ export default function WeatherOverlay() {
             }
         };
 
+        // 晴天：只绘制一次静态渐变，不持续 RAF
+        if (weather === 'sunny') {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const gradient = ctx.createRadialGradient(w * 0.8, h * 0.1, 0, w * 0.8, h * 0.1, 400);
+            gradient.addColorStop(0, 'rgba(255, 230, 150, 0.15)');
+            gradient.addColorStop(0.5, 'rgba(255, 200, 100, 0.05)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, w, h);
+
+            const handleResize = () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                const rw = canvas.width;
+                const rh = canvas.height;
+                const g = ctx.createRadialGradient(rw * 0.8, rh * 0.1, 0, rw * 0.8, rh * 0.1, 400);
+                g.addColorStop(0, 'rgba(255, 230, 150, 0.15)');
+                g.addColorStop(0.5, 'rgba(255, 200, 100, 0.05)');
+                g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, rw, rh);
+            };
+            window.addEventListener('resize', handleResize);
+            return () => {
+                window.removeEventListener('resize', handleResize);
+            };
+        }
+
+        // 非晴天：隔帧渲染（~30fps），减少与 deck.gl 抢 CPU
+        let frameSkip = false;
+
         const draw = () => {
+            // 隔帧渲染：每两帧只绘制一帧
+            frameSkip = !frameSkip;
+            if (frameSkip) {
+                animFrameIdRef.current = requestAnimationFrame(draw);
+                return;
+            }
+
             ctx.clearRect(0, 0, w, h);
             
-            if (weather === 'sunny') {
-                const gradient = ctx.createRadialGradient(w * 0.8, h * 0.1, 0, w * 0.8, h * 0.1, 400);
-                gradient.addColorStop(0, 'rgba(255, 230, 150, 0.15)');
-                gradient.addColorStop(0.5, 'rgba(255, 200, 100, 0.05)');
-                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, w, h);
-            } else if (weather === 'cloudy') {
+            if (weather === 'cloudy') {
                 // Dynamic drifting clouds with richer appearance
                 particles.forEach(p => {
                     // Create a subtle cloud gradient
@@ -69,8 +101,8 @@ export default function WeatherOverlay() {
                     ctx.ellipse(p.x + p.r * 0.3, p.y - p.r * 0.1, p.r * 0.6, p.r * 0.4, 0, 0, Math.PI * 2);
                     ctx.fill();
                     
-                    // Move based on wind
-                    p.x += (p.speed + windSpeed * 0.1);
+                    // Move based on wind (double step to compensate for halved frame rate)
+                    p.x += (p.speed + windSpeed * 0.1) * 2;
                     if (p.x > w + p.r) {
                         p.x = -p.r;
                         p.y = Math.random() * h;
@@ -86,8 +118,8 @@ export default function WeatherOverlay() {
                     const tilt = windSpeed * 3;
                     ctx.lineTo(p.x + tilt, p.y + p.l * 1.5); // Longer drops
                     ctx.stroke();
-                    p.y += p.v * 1.8; // Faster
-                    p.x += tilt / 2;
+                    p.y += p.v * 1.8 * 2; // Double step for halved framerate
+                    p.x += tilt / 2 * 2;
                     if (p.y > h) { p.y = -p.l * 1.5; p.x = Math.random() * (w + tilt) - tilt; }
                 });
             } else if (weather === 'snowy') {
@@ -96,8 +128,8 @@ export default function WeatherOverlay() {
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
                     ctx.fill();
-                    p.y += p.v * 0.4;
-                    p.x += Math.sin(p.y / 50 + p.x) * 1.5 + (windSpeed * 0.3);
+                    p.y += p.v * 0.4 * 2;
+                    p.x += (Math.sin(p.y / 50 + p.x) * 1.5 + (windSpeed * 0.3)) * 2;
                     if (p.y > h) { p.y = -p.r; p.x = Math.random() * w; }
                 });
             } else if (weather === 'hailing') {
@@ -106,13 +138,13 @@ export default function WeatherOverlay() {
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, p.r + 1.5, 0, Math.PI * 2);
                     ctx.fill();
-                    p.y += p.v * 2;
-                    p.x += windSpeed * 0.5;
+                    p.y += p.v * 2 * 2;
+                    p.x += windSpeed * 0.5 * 2;
                     if (p.y > h) { p.y = -p.r; p.x = Math.random() * w; }
                 });
             }
 
-            animationFrameId = requestAnimationFrame(draw);
+            animFrameIdRef.current = requestAnimationFrame(draw);
         };
 
         createParticles();
@@ -126,7 +158,7 @@ export default function WeatherOverlay() {
 
         window.addEventListener('resize', handleResize);
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
             window.removeEventListener('resize', handleResize);
         };
     }, [weather, windSpeed]);

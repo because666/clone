@@ -1,11 +1,11 @@
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import DeckGL from '@deck.gl/react';
-import { GeoJsonLayer, ColumnLayer, PathLayer } from '@deck.gl/layers';
+import { FlyToInterpolator } from '@deck.gl/core';
+import { GeoJsonLayer, ColumnLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import { Map as MapGL, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
-import AlgoLabPanel from './AlgoLabPanel';
 
 import { INITIAL_VIEW_STATE, CITY_COORDS } from '../constants/map';
 import { useCityData } from '../hooks/useCityData';
@@ -16,13 +16,18 @@ import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
 import WeatherOverlay from './WeatherOverlay';
-import { uavModelBuffer } from '../utils/animation';
+// 【性能优化】ECharts 延迟加载：统计面板默认隐藏，ECharts ~800KB 不再阻塞首屏
+const AnalyticsPanel = lazy(() => import('./AnalyticsPanel'));
+import TaskManagementPanel from './TaskManagementPanel';
+import DashboardOverlay from './DashboardOverlay';
+import { uavPositionsBuffer, uavOrientationsBuffer, activeUAVTrajectories, activeUAVCount } from '../utils/animation';
+import { binarySearchTimestamp } from '../utils/physics';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
 import { ErrorAlert } from './ErrorAlert';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MapSkeleton } from './MapSkeleton';
 
-export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = false }: { onRightPanelToggle?: (open: boolean) => void, isRightPanelOpen?: boolean } = {}) {
+export default function MapContainer() {
     const {
         buildingsData,
         poiDemand,
@@ -35,21 +40,51 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         timeRangeRef,
         currentTimeRef,
         loadCityData,
-        reloadCurrentTrajectories,
+        setTrajectories,
         clearError
     } = useCityData();
 
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
-    const [pickMode, setPickMode] = useState<'from' | 'to' | null>(null);
-    const [pickedFrom, setPickedFrom] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
-    const [pickedTo, setPickedTo] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
+    const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+    const [isTasksOpen, setIsTasksOpen] = useState(false);
+    const [toastState, setToastState] = useState<{ msg: string, type: 'info' | 'success' | 'error' | 'loading' } | null>(null);
+
+    const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'loading' = 'info') => {
+        setToastState({ msg, type });
+        setTimeout(() => setToastState(null), type === 'error' ? 5000 : 3000);
+    }, []);
+
+    // 两点选取状态：点击第一个 demand POI 选起点，点击第二个自动生成轨迹
+    const pickedFromRef = useRef<{ lat: number; lon: number; id: string; name: string } | null>(null);
+    const [pickedFromDisplay, setPickedFromDisplay] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [hoverInfo, setHoverInfo] = useState<any>(null);
+    const [hoverInfo, setHoverInfoState] = useState<any>(null);
+    // ==========================================
+    // 渲染闭环稳定性防护：悬停状态频率节流
+    // 由于 Deck.gl 的 onHover 每移动 1px 就会触发，如果直接 setState 会导致 MapContainer
+    // 这个庞然大物遭受毁灭性的重绘雪崩（DOM树震荡）。
+    // 解法：利用 mutable ref 同步真实状态，只在“鼠标跨越到新无人机”的边界时刻，才调用 setState 突破防线。
+    // ==========================================
+    const hoverInfoRef = useRef<any>(null);
+    const setHoverInfo = useCallback((info: any) => {
+        // 仅在 hover 目标对象变化时才触发 re-render（而非每次鼠标移动）
+        const prevId = hoverInfoRef.current?.object?.properties?.name || hoverInfoRef.current?.object?.id;
+        const newId = info?.object?.properties?.name || info?.object?.id;
+        if (prevId !== newId || (!info && hoverInfoRef.current)) {
+            setHoverInfoState(info);
+        }
+        hoverInfoRef.current = info;
+    }, []);
     const [currentCity, setCurrentCity] = useState("shenzhen");
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
 
+    // 将 zoom 量化为 0.5 级阶梯，只有跨阶梯时才触发依赖 zoom 的图层重建
+    const quantizedZoom = useMemo(() => Math.round((viewState.zoom || 11) * 2) / 2, [viewState.zoom]);
+
     const mapRef = useRef<MapRef>(null);
     const deckRef = useRef<any>(null);
+    // 【新增】用于脱离 React 生命周期的独立锁机跟拍状态
+    const trackingStateRef = useRef<{ isTracking: boolean, lockedFlight: any | null }>({ isTracking: false, lockedFlight: null });
 
     const { windSpeed } = useWindSpeed();
     const { pushAlert } = useAlerts();
@@ -62,11 +97,115 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         progressBarRef,
         progressTextRef,
         handleProgressClick
-    } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert);
+    } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert, trackingStateRef);
 
     useEffect(() => {
         loadCityData("shenzhen", () => setSelectedFlight(null));
     }, [loadCityData]);
+
+    // 基于 SSE 获取并注入执行中的实时任务轨迹
+    useEffect(() => {
+        const fetchActiveTasks = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/tasks?status=EXECUTING', {
+                    headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+                });
+                const data = await res.json();
+                if (data.ok && data.tasks) {
+                    setTrajectories(prev => {
+                        const existingIds = new Set(prev.map((t: any) => t.id));
+                        const newTrajs = [];
+                        for (const task of data.tasks) {
+                            if (task.trajectory_data && task.trajectory_data.id) {
+                                if (!existingIds.has(task.trajectory_data.id)) {
+                                    const newTraj = { ...task.trajectory_data };
+                                    // 偏移时间使其从当前时刻开始飞行
+                                    const offset = currentTimeRef.current;
+                                    newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
+                                    newTrajs.push(newTraj);
+                                }
+                            }
+                        }
+                        if (newTrajs.length > 0) {
+                            return [...prev, ...newTrajs];
+                        }
+                        return prev;
+                    });
+                }
+            } catch (err) {}
+        };
+
+        // 初始拉取
+        fetchActiveTasks();
+
+        // ⚡️ SSE 全栈双工推送：一旦有新审批通过并执行的订单，0 毫秒立即拉入地图渲染层
+        const token = localStorage.getItem('token') || '';
+        const eventSource = new EventSource(`/api/tasks/stream?token=${token}`);
+        eventSource.onopen = () => console.log('[SSE Map] Stream Connected.');
+        eventSource.onmessage = (e) => {
+            if (e.data === 'update') {
+               fetchActiveTasks();
+            }
+        };
+
+        return () => {
+            eventSource.close();
+        };
+    }, [setTrajectories, currentTimeRef]);
+
+    const handleFocusFlight = useCallback((flight: any) => {
+        if (!flight || !flight.path || !flight.timestamps) return;
+        
+        setSelectedFlight(flight);
+        // 开启硬锁定跟拍模式
+        trackingStateRef.current = { isTracking: true, lockedFlight: flight };
+
+        const t = currentTimeRef.current;
+        const times = flight.timestamps;
+        const index = times.findIndex((time: number) => time >= t);
+        
+        let lon, lat;
+        if (index > 0 && index < times.length) {
+            const t0 = times[index - 1];
+            const t1 = times[index];
+            const p0 = flight.path[index - 1];
+            const p1 = flight.path[index];
+            const ratio = (t - t0) / (t1 - t0);
+            lon = p0[0] + (p1[0] - p0[0]) * ratio;
+            lat = p0[1] + (p1[1] - p0[1]) * ratio;
+        } else if (index === -1) {
+            lon = flight.path[flight.path.length - 1][0];
+            lat = flight.path[flight.path.length - 1][1];
+        } else {
+            lon = flight.path[0][0];
+            lat = flight.path[0][1];
+        }
+
+        setViewState((prev: any) => {
+            const targetZoom = Math.max(prev.zoom, 14.5);
+            // 计算右偏置距：使无人机显示在屏幕中右侧，避免被左侧侧边栏遮挡
+            const lngOffset = 0.05 * Math.pow(2, 13 - targetZoom);
+            return {
+                ...prev,
+                longitude: lon - lngOffset,
+                latitude: lat,
+                pitch: 45,
+                transitionDuration: 1000,
+                transitionInterpolator: new FlyToInterpolator({ speed: 1.2 })
+            };
+        });
+    }, [currentTimeRef]);
+
+    const handleViewStateChange = useCallback(({ viewState: nextViewState, interactionState }: any) => {
+        const { longitude, latitude, zoom, pitch, bearing } = nextViewState;
+        setViewState({ longitude, latitude, zoom, pitch, bearing, maxPitch: INITIAL_VIEW_STATE.maxPitch });
+        
+        // 任何人为的交互拖拽操作立即解除硬锁定，退回手动视野模式
+        if (interactionState?.isDragging || interactionState?.isPanning || interactionState?.isRotating) {
+            trackingStateRef.current.isTracking = false;
+        }
+    }, []);
 
     const handleCityJump = useCallback((city: string) => {
         setCurrentCity(city);
@@ -82,27 +221,75 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         loadCityData(city, () => setSelectedFlight(null));
     }, [loadCityData]);
 
-    const handleViewStateChange = useCallback(({ viewState }: any) => {
-        const { longitude, latitude, zoom, pitch, bearing } = viewState;
-        setViewState({ longitude, latitude, zoom, pitch, bearing, maxPitch: INITIAL_VIEW_STATE.maxPitch });
-    }, []);
-
     const handleDemandPick = useCallback((info: any) => {
-        if (!info.object || pickMode === null) return;
+        if (!info.object) return;
         const feat = info.object;
         const coords = feat.geometry?.coordinates;
         if (!coords) return;
         const [lon, lat] = coords;
         const props = feat.properties || {};
         const picked = { lat, lon, id: String(props.poi_id || props.osm_id || ''), name: props.name || '' };
-        if (pickMode === 'from') {
-            setPickedFrom(picked);
-            setPickMode('to');
+
+        if (!pickedFromRef.current) {
+            // 第一次点击：选起点
+            pickedFromRef.current = picked;
+            setPickedFromDisplay(picked);
+            showToast(`已选择起点：${picked.name || picked.id}，请点击另一个点作为终点`, 'info');
         } else {
-            setPickedTo(picked);
-            setPickMode(null);
+            // 第二次点击：选终点，自动调用 API 生成轨迹
+            const from = pickedFromRef.current;
+
+            // 如果点击同一个点，则取消选择
+            if (from.id === picked.id) {
+                pickedFromRef.current = null;
+                setPickedFromDisplay(null);
+                showToast(`已取消选择`, 'info');
+                return;
+            }
+
+            pickedFromRef.current = null;
+            setPickedFromDisplay(null);
+
+            showToast(`正在提交到 ${picked.name || picked.id} 的任务审批...`, 'loading');
+
+            // 异步调用 tasks API 提交调度任务（状态：PENDING等待审批）
+            const token = localStorage.getItem('token');
+            fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    city: currentCity,
+                    from_lat: from.lat, from_lon: from.lon, from_id: from.id,
+                    to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id
+                }),
+            })
+                .then(async r => {
+                    const text = await r.text();
+                    try {
+                        const data = JSON.parse(text);
+                        return { data };
+                    } catch (err) {
+                        if (r.status === 504 || r.status === 502) {
+                            throw new Error("后台算法服务未启动 (网关超时)，请确保运行了 python server.py");
+                        }
+                        throw new Error(`非预期的服务器响应 (状态码 ${r.status})`);
+                    }
+                })
+                .then(({ data }) => {
+                    if (data.ok) {
+                        showToast(`🚀 任务提交成功！已进入待审批状态 (ID: ${data.task_id.substring(0,8)})`, 'success');
+                    } else {
+                        showToast(`提交失败：${data.error || data.message || '未知错误'}`, 'error');
+                    }
+                })
+                .catch((e) => {
+                    showToast(`请求失败：${e.message}`, 'error');
+                });
         }
-    }, [pickMode]);
+    }, [currentCity, setTrajectories, showToast]);
 
     const handleMapLoad = useCallback(() => {
         const map = mapRef.current?.getMap();
@@ -130,24 +317,25 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
     // 渐进式渲染：根据加载状态决定是否渲染各图层
     const buildingsLayer = useMemo(() => {
         if (!buildingsData) return null;
+        const z = quantizedZoom;
         return new GeoJsonLayer({
             id: 'buildings-layer',
             data: buildingsData,
             extruded: true,
             filled: true,
-            stroked: true,
-            wireframe: true,
+            // 远景时关闭3D轮廓线，避免密集的线框导致抗锯齿计算过载和花屏
+            stroked: z > 13,
+            wireframe: z > 13,
             getFillColor: [170, 180, 195, 255],
             getLineColor: [80, 90, 110, 255],
             getLineWidth: 1,
             lineWidthMinPixels: 1,
             getElevation: ((d: any) => d.properties.height || 20) as any,
-            pickable: true,
-            autoHighlight: true,
-            highlightColor: [80, 140, 220, 255],
+            pickable: false,
+            autoHighlight: false,
             material: { ambient: 0.4, diffuse: 0.6, shininess: 32, specularColor: [220, 230, 240] },
         });
-    }, [buildingsData]);
+    }, [buildingsData, quantizedZoom]);
 
     const poiDemandLayer = useMemo(() => {
         if (!poiDemand) return null;
@@ -157,13 +345,13 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             stroked: true,
             filled: true,
             lineWidthMinPixels: 1,
-            getPointRadius: 25,
+            // 放大基础半径到45米，使其在3D空间中成为包围大楼的“发光底座”
+            getPointRadius: 45,
             pointRadiusMinPixels: 4,
-            pointRadiusMaxPixels: 16,
+            // 删除了 pointRadiusMaxPixels 限制，让光圈可以随视角放大而正常占据视野，绝不会再在近距离缩成找不到的小点
             getFillColor: (d: any) => {
-                if (pickedFrom && d.properties?.poi_id === pickedFrom.id) return [52, 255, 100, 255];
-                if (pickedTo && d.properties?.poi_id === pickedTo.id) return [255, 80, 80, 255];
-                return [52, 211, 153, 160];
+                if (pickedFromDisplay && d.properties?.poi_id === pickedFromDisplay.id) return [52, 255, 100, 255];
+                return [52, 211, 153, 140]; // 略微透明，更好融合地面
             },
             getLineColor: [5, 150, 105, 220],
             pickable: true,
@@ -171,16 +359,26 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             highlightColor: [255, 220, 50, 220],
             onClick: handleDemandPick,
             onHover: (info: any) => setHoverInfo(info),
-            cursor: pickMode !== null ? 'crosshair' : 'pointer',
+            cursor: 'pointer',
+            // 移除 depthTest: false，恢复真实的 3D 物理遮挡，保留最优雅的空间层次感
+            updateTriggers: {
+                getFillColor: [pickedFromDisplay?.id]
+            }
         } as any);
-    }, [poiDemand, pickedFrom, pickedTo, pickMode, handleDemandPick]);
+    }, [poiDemand, pickedFromDisplay, handleDemandPick]);
 
     const poiSensitiveLayer = useMemo(() => {
         if (!sensitivePoints.length) return null;
+        // 基于量化 Zoom 计算平滑过渡因子 (10.5 远景 -> 13.5 近景)
+        const z = quantizedZoom;
+        const t = Math.max(0, Math.min(1, (z - 10.5) / 3.0));
+        const fillAlpha = Math.round(t * 25);
+        const lineAlpha = Math.round(t * 200);
+
         return new ColumnLayer({
             id: 'poi-sensitive-point-layer',
             data: sensitivePoints,
-            diskResolution: 20,
+            diskResolution: 12, // 12边形：在视觉上保持“圆形”轮廓，同时垂直红线数量比最初的20条减少了近一半
             radius: 100,
             getRadius: (d: any) => {
                 const category = d.properties?.category || '';
@@ -197,14 +395,14 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             },
             pickable: true,
             elevationScale: 1,
-            wireframe: true,
-            getLineWidth: 2,
+            wireframe: z > 11.5,
+            getLineWidth: z > 11.5 ? 2 : 0,
             getPosition: (d: any) => d.geometry.coordinates,
-            getFillColor: [255, 60, 60, 25],
-            getLineColor: [255, 80, 80, 200],
+            getFillColor: [255, 60, 60, fillAlpha],
+            getLineColor: [255, 80, 80, lineAlpha],
             getElevation: 400,
         });
-    }, [sensitivePoints]);
+    }, [sensitivePoints, quantizedZoom]);
 
     // 组合静态图层（渐进式渲染）
     const staticLayers = useMemo(() => {
@@ -215,16 +413,32 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         return layers;
     }, [buildingsLayer, poiDemandLayer, poiSensitiveLayer]);
 
-    // 实时读取最新的 mutable buffer，不缓存，避免暂停触发 React 重绘时拿到初始的空数组
-    const activeUAVs = uavModelBuffer.filter(u => u.isActive);
-
+    // ==========================================
+    // 超大规模集群渲染方案：3D 模型层 (ScenegraphLayer)
+    // 问题：Deck.gl 官方虽然声称支持 Binary Attributes，但 ScenegraphLayer 因历史包袱，
+    // 其底层实现仍在 CPU 上遍历计算 16 维的 instanceModelMatrix。
+    // 解法：放弃传入直接的 attributes 对象，转而向 data 传入 { length: N } 作为迭代触发器。
+    // 在 getOrientation 等回调中，利用暴露的 {index} 直接越过对象的重重解构，
+    // 指针直达我们在 Worker / 动画引擎中维护的 Float32Array SoA 内存块。
+    // 这保持了前端架构的绝对“零内存分配”，避免了海量新生代对象引发的 GC 卡顿。
+    // ==========================================
     const uavModelLayer = useMemo(() => {
         return new ScenegraphLayer({
             id: 'uav-model-layer',
-            data: [] as any[], // 基础层不绑定数据，在实际使用时 clone 注入
+            data: {
+                length: 0
+            },
             scenegraph: '/dji_spark.glb',
-            getPosition: (d: any) => d.position,
-            getOrientation: (d: any) => d.orientation,
+            getPosition: (_: any, {index}: any) => [
+                uavPositionsBuffer[index * 3 + 0],
+                uavPositionsBuffer[index * 3 + 1],
+                uavPositionsBuffer[index * 3 + 2]
+            ],
+            getOrientation: (_: any, {index}: any) => [
+                uavOrientationsBuffer[index * 3 + 0],
+                uavOrientationsBuffer[index * 3 + 1],
+                uavOrientationsBuffer[index * 3 + 2]
+            ],
             sizeScale: 7.5,
             _lighting: 'pbr',
             _animations: { '*': { playing: true } },
@@ -233,22 +447,72 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
             autoHighlight: true,
             highlightColor: [255, 255, 0, 255],
             onClick: (info: any) => {
-                if (info.object) setSelectedFlight(info.object.trajectory);
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    setSelectedFlight(activeUAVTrajectories[info.index]);
+                }
             },
             onHover: (info: any) => {
-                if (info.object) {
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    const traj = activeUAVTrajectories[info.index];
                     setHoverInfo({
                         ...info,
-                        object: { properties: { name: `无人机 ${info.object.id}`, type: 'uav' } }
+                        object: { properties: { name: `无人机 ${traj.id}`, type: 'uav' }, trajectory: traj }
                     });
                 } else if (hoverInfo?.object?.properties?.type === 'uav') {
                     setHoverInfo(null);
                 }
             }
         });
-    }, [viewState.zoom]);
+    }, [hoverInfo]);
+
+    // ==========================================
+    // 超大规模集群渲染方案：LOD (Level of Detail) 降级光点层
+    // 策略：当缩放级别（Zoom）退远，模型细小到几个像素时，强行调用 3D 渲染器是不理智的。
+    // 我们无缝切换至原生支持 Binary Attributes 直传的 ScatterplotLayer（散点层）。
+    // 将整个 uavPositionsBuffer 作为单一二进制流推入 GPU VRAM，此时 CPU 连 for 循环开销都省了。
+    // ==========================================
+    const uavPointLayer = useMemo(() => {
+        return new ScatterplotLayer({
+            id: 'uav-point-layer',
+            data: {
+                length: 0,
+                attributes: {
+                    getPosition: { value: uavPositionsBuffer, size: 3 }
+                }
+            },
+            getFillColor: [0, 255, 255, 255],
+            getRadius: 8,
+            radiusMinPixels: 4,
+            radiusMaxPixels: 12,
+            pickable: true,
+            autoHighlight: true,
+            highlightColor: [255, 255, 0, 255],
+            onClick: (info: any) => {
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    setSelectedFlight(activeUAVTrajectories[info.index]);
+                }
+            },
+            onHover: (info: any) => {
+                if (info.index >= 0 && activeUAVTrajectories[info.index]) {
+                    const traj = activeUAVTrajectories[info.index];
+                    setHoverInfo({
+                        ...info,
+                        object: { properties: { name: `无人机 ${traj.id}`, type: 'uav' }, trajectory: traj }
+                    });
+                } else if (hoverInfo?.object?.properties?.type === 'uav') {
+                    setHoverInfo(null);
+                }
+            }
+        });
+    }, [hoverInfo]);
 
     const activeTailLayer = useMemo(() => {
+        // 轨迹平滑衰减处理（使用量化 zoom，减少重建频率）
+        const z = quantizedZoom;
+        const t = Math.max(0, Math.min(1, (z - 10.5) / 3.0));
+        const widthMinPx = 0.5 + t * 2.0;    // 0.5px -> 2.5px
+        const layerOpacity = 0.4 + t * 0.5;  // 0.4 -> 0.9
+
         return new TripsLayer({
             id: 'uav-active-tail-layer',
             data: trajectories,
@@ -264,17 +528,19 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                 }
                 return [14, 165, 233];
             },
-            widthMinPixels: 2.5,
+            widthMinPixels: widthMinPx,
             trailLength: 100,
             currentTime: currentTimeRef.current,
             shadowEnabled: false,
-            opacity: 0.9,
-            pickable: true,
+            opacity: layerOpacity,
+            // 【性能优化】拖尾层关闭拾取：500+ 条轨迹的拾取 framebuffer 是 GPU 性能黑洞
+            // 用户通过点击 UAV 模型/散点选中无人机，无需在拖尾上拾取
+            pickable: false,
             updateTriggers: {
                 getColor: energyData
             }
         });
-    }, [trajectories, energyData]);
+    }, [trajectories, energyData, quantizedZoom]);
 
     const hoverPathLayer = useMemo(() => {
         let pathData: any[] = [];
@@ -300,13 +566,63 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
         ...staticLayers,
         activeTailLayer,
         hoverPathLayer,
-        uavModelLayer.clone({
-            data: activeUAVs,
+        // 核心渲染调度：根据量化后的整数级视角缩放 (quantizedZoom >= 13) 进行实时 LOD 切换调度
+        // 注：之所以使用 clone() 模式，是利用 Deck.gl 的 Diff 机制，复用前一帧的底层 WebGL Context，
+        // 从而将帧切换的成本从“重组 Scene 图”降维成了单纯的 Uniform 变量和 Buffer 指针更新。
+        quantizedZoom >= 13 ? uavModelLayer.clone({
+            data: {
+                length: activeUAVCount
+            },
             updateTriggers: {
                 getPosition: currentTimeRef.current,
                 getOrientation: currentTimeRef.current
             }
-        })
+        }) : uavPointLayer.clone({
+            data: {
+                length: activeUAVCount,
+                attributes: {
+                    getPosition: { value: uavPositionsBuffer, size: 3 }
+                }
+            },
+            updateTriggers: {
+                getPosition: currentTimeRef.current
+            }
+        }),
+
+        // 选中无人机的强调光圈，使用 currentTimeRef 保持实时移动
+        selectedFlight ? new ScatterplotLayer({
+            id: 'selected-uav-layer',
+            data: [selectedFlight],
+            getPosition: (d: any) => {
+                const t = currentTimeRef.current;
+                const times = d.timestamps;
+                const index = binarySearchTimestamp(times, t);
+                if (index <= 0) return d.path[0];
+                if (index >= times.length) return d.path[d.path.length - 1];
+                
+                const t0 = times[index - 1];
+                const t1 = times[index];
+                const p0 = d.path[index - 1];
+                const p1 = d.path[index];
+                const ratio = (t - t0) / (t1 - t0);
+                return [
+                    p0[0] + (p1[0] - p0[0]) * ratio,
+                    p0[1] + (p1[1] - p0[1]) * ratio,
+                    (p0[2] + (p1[2] - p0[2]) * ratio) || 0
+                ];
+            },
+            getFillColor: [255, 190, 0, 200],
+            getLineColor: [255, 255, 255, 255],
+            lineWidthMinPixels: 3,
+            radiusMinPixels: 15,
+            radiusMaxPixels: 60,
+            opacity: 1,
+            stroked: true,
+            filled: true,
+            updateTriggers: {
+                getPosition: currentTimeRef.current
+            }
+        }) : null
     ].filter(Boolean);
 
     const handleRetryLoad = useCallback(() => {
@@ -349,6 +665,8 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                     />
                 </DeckGL>
 
+                <DashboardOverlay onOpenAnalytics={() => setIsAnalyticsOpen(true)} onOpenTasks={() => setIsTasksOpen(true)} currentCity={currentCity} />
+
                 <HoverTooltip hoverInfo={hoverInfo} />
 
                 <FlightDetailPanel
@@ -357,6 +675,29 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                     currentTimeRef={currentTimeRef}
                     setSelectedFlight={setSelectedFlight}
                 />
+
+                <Suspense fallback={null}>
+                    {isAnalyticsOpen && (
+                        <AnalyticsPanel 
+                            trajectories={trajectories}
+                            energyData={energyData}
+                            currentTimeRef={currentTimeRef}
+                            isVisible={isAnalyticsOpen}
+                            onClose={() => setIsAnalyticsOpen(false)}
+                        />
+                    )}
+                </Suspense>
+
+                {isTasksOpen && (
+                    <TaskManagementPanel
+                        isVisible={isTasksOpen}
+                        onClose={() => setIsTasksOpen(false)}
+                        activeUAVCount={trajectories.length}
+                        trajectories={trajectories}
+                        currentCity={currentCity}
+                        onFocusFlight={handleFocusFlight}
+                    />
+                )}
 
                 {/* 骨架屏 - 在数据加载完成前显示 */}
                 {isLoadingCity && (
@@ -388,6 +729,23 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                     💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
                 </div>
 
+                {/* 毛玻璃风格的灵动胶囊提示条，不再遮挡视线 */}
+                {toastState && (
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-4">
+                        <div className="bg-slate-900/60 text-white px-6 py-2.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-white/10 backdrop-blur-md flex items-center space-x-3">
+                            {toastState.type === 'info' && <span className="text-lg">🎯</span>}
+                            {toastState.type === 'success' && <span className="text-lg drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">✨</span>}
+                            {toastState.type === 'error' && <span className="text-lg drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]">❌</span>}
+                            {toastState.type === 'loading' && (
+                                <span className="flex items-center justify-center w-5 h-5">
+                                    <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                                </span>
+                            )}
+                            <span className="text-sm font-medium tracking-wide whitespace-nowrap">{toastState.msg}</span>
+                        </div>
+                    </div>
+                )}
+
                 <PlaybackControls
                     isPlaying={isPlaying}
                     setIsPlaying={setIsPlaying}
@@ -403,17 +761,6 @@ export default function MapContainer({ onRightPanelToggle, isRightPanelOpen = fa
                     timeRangeMax={timeRangeRef.current.max}
                 />
 
-                <AlgoLabPanel
-                    city={currentCity}
-                    onTrajectoriesUpdated={reloadCurrentTrajectories}
-                    pickMode={pickMode}
-                    setPickMode={setPickMode}
-                    pickedFrom={pickedFrom}
-                    pickedTo={pickedTo}
-                    onClearPick={() => { setPickedFrom(null); setPickedTo(null); setPickMode(null); }}
-                    onToggle={onRightPanelToggle}
-                    isOpen={isRightPanelOpen}
-                />
                 <WeatherOverlay />
             </div>
         </ErrorBoundary>

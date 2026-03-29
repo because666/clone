@@ -25,7 +25,7 @@ pip install flask flask-cors pandas scikit-learn joblib
 
 ### 2. 批量生成轨迹（直接写入前端）
 ```bash
-python trajectory_lab/scripts/batch_generate.py --city shenzhen --n 2000
+python trajectory_lab/scripts/batch_generate.py --city shenzhen --n 1000
 ```
 
 ### 3. 指定两点生成单条轨迹
