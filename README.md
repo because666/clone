@@ -1,6 +1,6 @@
 <div align="center">
-  <!-- 💡 占位符：项目精美 Logo -->
-  <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="200" />
+  <!-- 项目专属 Logo (已缩放至最佳展示尺寸) -->
+  <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="120" />
 
   <h1> AetherWeave | 苍穹织网 </h1>
   <p><strong>面向未来城市的低空物流 3D 实时调度与监控中枢</strong></p>
@@ -32,12 +32,9 @@
 
 ## 👁‍🗨 视觉
 
-> 💡 **占位提示**: 下方请替换为高质量的 `.webp` 动图或 `视频`，这是整个 README 最抓眼球的地方。
-> **推荐录制内容**：在深色底图下，满屏带尾迹（Trail）泛光效果的无人机群在 3D 楼宇间穿梭；左侧是科技感十足的毛玻璃（Glassmorphism）数据面板，数字实时跳动。
-
 <div align="center">
-  <!-- 💡 占位符：主核心运行录屏动图 -->
-  <img src="docs/assets/demo_main.webp" alt="核心调度中枢 3D 演示" width="100%" />
+  <!-- 核心大屏调度全景（已上传） -->
+  <img src="docs/assets/demo_main.gif" alt="核心调度中枢 3D 演示" width="100%" />
 </div>
 
 <br>
@@ -45,23 +42,23 @@
 <div align="center">
   <table>
     <tr>
-      <!-- 💡 占位符：子功能演示图 1：聚焦某个无人机 -->
+      <!-- 模块 1：高潮追踪录屏（已上传） -->
       <td align="center">
-        <img src="docs/assets/demo_tracking.webp" alt="单机聚焦与轨迹回溯"/><br/>
-        <b>👆 电影级镜头锁定与轨迹追踪</b><br/>
-        <sub>点击无人机，镜头平滑锁定，呈现 4D 历史航线与预估到达时间</sub>
+        <img src="docs/assets/demo_tracking.gif" alt="单机聚焦与轨迹回溯"/><br/>
+        <b>👆 镜头绑定与单机深度追踪</b><br/>
+        <sub>锁定高危隐患航班，同步呈现三维历史航线与到点预估时间</sub>
       </td>
-      <!-- 💡 占位符：子功能演示图 2：用自然语言框打字交互 -->
+      <!-- 模块 2：AI 面板（等待开发） -->
       <td align="center">
-        <img src="docs/assets/demo_nlp_dispatch.webp" alt="自然语言指令调度"/><br/>
-        <b>👆 AI 驱动的自然语言调度面板</b><br/>
-        <sub>通过大语言模型解析操作意图，完成无代码级的秒级动态运力调配</sub>
+        <img src="https://via.placeholder.com/600x380/1e293b/0ea5e9?text=[+WIP+]+AI+Dispatch+Module" alt="自然语言指令调度(研发中)"/><br/>
+        <b>👆 🚧 预留：AI 智能体大模型联控台</b><br/>
+        <sub>解析模糊自然语言意图，触发底盘秒级空域避障调度重播</sub>
       </td>
     </tr>
   </table>
 </div>
 
-## ✨ 特性与功能说明
+## ✨ 特性与功能
 
 - 🚀 **高密度三维渲染**: 采用 `Deck.gl` 的 Binary 渲染模式与自定义 `TypedArray` 限制内存分配频率，减少 GC 卡顿。配合 LOD 优化限制不可见区域开销，系统可稳定支持 500+ 架并发 UAV 和 10 万+ 轨迹节点的高帧率大屏渲染。
 - 🧠 **三维动态避障与寻路**: 后端算法应用 0.0005° 精度网格进行空间建模和线段碰撞检测，实现规避真实建筑群与多边形禁飞区的三维航线规划，支持动态地形高程匹配与路径点平滑过滤。
@@ -70,9 +67,8 @@
 - 🔐 **权限隔离与持久化审查**: 采用 `JWT` 角色管控架构区分大盘展示与后台派发权限。核心业务流水、飞行轨迹点与操作者派送指令均实时写入 `SQLite/PostgreSQL` 数据库，保障记录不可篡改以备朔源审查。
 - 📊 **空域数据聚合与分析**: 内置基于 `ECharts` 构建的统计面板组件。聚合运行时间线内的派送状态等结构化数据，展示分时段起降热力分布、空域运力负载趋势与能耗使用统计，作为非实时情况判断的辅助。
 
-## 🏗 系统架构 (Architecture)
+## 🏗 架构
 
-> 💡 **架构图提示**: 以下是由 Mermaid 驱动的架构图，能够直观展示我们全栈的流转闭环。您可以在本地将其导出为图片后替换，或直接保留在 Markdown 中由 Git 平台原生接管渲染。
 
 ```mermaid
 flowchart TD
@@ -125,8 +121,6 @@ flowchart TD
 ```
 
 ## 🚀 快速上手
-
-> 我们深知时间宝贵，因此遵循严格的 **“三分内跑通”** 原则。
 
 ### 1. 环境预检
 - **Node.js**: >= 18.0.0
