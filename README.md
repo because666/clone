@@ -33,8 +33,10 @@
 ## 👁‍🗨 视觉
 
 <div align="center">
-  <!-- 核心大屏调度全景（已上传） -->
-  <img src="docs/assets/demo_main.gif" alt="核心调度中枢 3D 演示" width="100%" />
+  <!-- 核心大屏调度全景 -->
+  <video src="https://raw.githubusercontent.com/TengJiao33/AetherWeave/master/docs/assets/demo_main.mp4" autoplay loop muted playsinline style="width: 100%;"></video>
+  <br>
+  <sub>如果视频未自动播放，清刷新页面或前往 <a href="docs/assets/demo_main.mp4">原生资源库</a> 查看</sub>
 </div>
 
 <br>
@@ -42,9 +44,9 @@
 <div align="center">
   <table>
     <tr>
-      <!-- 模块 1：高潮追踪录屏（已上传） -->
+      <!-- 模块 1：高潮追踪录屏 -->
       <td align="center">
-        <img src="docs/assets/demo_tracking.gif" alt="单机聚焦与轨迹回溯"/><br/>
+        <video src="https://raw.githubusercontent.com/TengJiao33/AetherWeave/master/docs/assets/demo_tracking.mp4" autoplay loop muted playsinline style="width: 100%;"></video><br/>
         <b>👆 镜头绑定与单机深度追踪</b><br/>
         <sub>锁定高危隐患航班，同步呈现三维历史航线与到点预估时间</sub>
       </td>
