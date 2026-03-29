@@ -1,19 +1,16 @@
 import MapContainer from '../components/MapContainer';
-import { WindSpeedProvider } from '../contexts/WindSpeedContext';
+import { EnvironmentProvider } from '../contexts/EnvironmentContext';
 import { AlertNotificationProvider } from '../components/AlertNotificationProvider';
-import { WeatherProvider } from '../contexts/WeatherContext';
 
 function DashboardPage() {
   return (
-    <WindSpeedProvider>
+    <EnvironmentProvider>
       <AlertNotificationProvider>
-        <WeatherProvider>
-          <div className="relative w-screen h-screen overflow-hidden bg-slate-900">
-            <MapContainer />
-          </div>
-        </WeatherProvider>
+        <div className="relative w-screen h-screen overflow-hidden bg-slate-900">
+          <MapContainer />
+        </div>
       </AlertNotificationProvider>
-    </WindSpeedProvider>
+    </EnvironmentProvider>
   );
 }
 

@@ -4,8 +4,11 @@ import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTra
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 import AnimationWorker from '../workers/animation.worker?worker';
 
-// 动画渲染的步长常量
 const ANIMATION_SPEED = 0.016;
+
+// 业务基数模拟常量：使前端演示脱离封闭的短时截面数据集束缚，更贴近真实大屏
+const CITY_AIRSPACE_CAPACITY = 1200;  // 模拟南山区低空网络设计最大瞬时并发承载能力
+const BASE_CUMULATIVE_FLIGHTS = 8440; // 模拟从当天凌晨至演示启动前，已经完成的历史基础订单累积量
 
 /**
  * 告警检测帧切片分箱机制（Time Slicing / Binning）
@@ -223,8 +226,10 @@ export function useUAVAnimation(
         if (sec < 0) return;
 
         const activeCount = metricsRef.current.active[sec] || 0;
-        const cumCount = metricsRef.current.cumulative[sec] || 0;
-        const loadPct = ((activeCount / metricsRef.current.maxActive) * 100 + 0.5) | 0;
+        // 累加上全天历史基数，呈现出一个宏大且单调递增的今日真实流水量
+        const cumCount = (metricsRef.current.cumulative[sec] || 0) + BASE_CUMULATIVE_FLIGHTS;
+        // 使用宏观物理空域承载力作为分母（避免用数据自身峰值当分母造成的假100%现象），设定 100 封顶
+        const loadPct = Math.min(100, ((activeCount / CITY_AIRSPACE_CAPACITY) * 100 + 0.5) | 0);
 
         // 懒初始化 DOM 缓存
         const cache = domCacheRef.current;

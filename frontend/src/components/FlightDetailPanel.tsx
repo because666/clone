@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 
 interface FlightDetailPanelProps {
@@ -15,7 +15,7 @@ export default function FlightDetailPanel({
     currentTimeRef,
     setSelectedFlight
 }: FlightDetailPanelProps) {
-    const { windSpeed } = useWindSpeed();
+    const { windSpeed } = useEnvironment();
 
     // 【性能优化 P0-4】预计降落电量缓存：对同一架无人机的 battery 数组只遍历一次
     // 使用 for 循环替代 filter() + Math.min(...spread)，消除每帧 GC 压力和大数组 stack overflow 风险

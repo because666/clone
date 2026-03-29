@@ -9,7 +9,9 @@ import { useCityData } from '../hooks/useCityData';
 import { useUAVAnimation } from '../hooks/useUAVAnimation';
 import { useSSESubscription } from '../hooks/useSSESubscription';
 import { useMapLayers } from '../hooks/useMapLayers';
-import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useSandbox } from '../hooks/useSandbox';
+import { useFlightPicking } from '../hooks/useFlightPicking';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { useAlerts } from './AlertNotificationProvider';
 import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
@@ -49,29 +51,27 @@ export default function MapContainer() {
     const [isTasksOpen, setIsTasksOpen] = useState(false);
     const [toastState, setToastState] = useState<{ msg: string, type: 'info' | 'success' | 'error' | 'loading' } | null>(null);
 
-    // Sandbox states
-    const [isSandboxMode, setIsSandboxMode] = useState(false);
-    const [sandboxCenters, setSandboxCenters] = useState<{lat: number, lon: number}[]>([]);
-    const [sandboxRadius, setSandboxRadius] = useState(3000);
-    const [roiDatas, setRoiDatas] = useState<any[]>([]);
-    const [sandboxCompareMode, setSandboxCompareMode] = useState(false);
-    
-    // 雷达图层动画状态
-    const [radarSweepActive, setRadarSweepActive] = useState(false);
-    const [radarSweepRadius, setRadarSweepRadius] = useState(0);
-
-    const [roiLoading, setRoiLoading] = useState(false);
-    const [roiError, setRoiError] = useState<string | null>(null);
-
     const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'loading' = 'info') => {
         setToastState({ msg, type });
         setTimeout(() => setToastState(null), type === 'error' ? 5000 : 3000);
     }, []);
 
-    // 两点选取状态：点击第一个 demand POI 选起点，点击第二个自动生成轨迹
-    const pickedFromRef = useRef<{ lat: number; lon: number; id: string; name: string } | null>(null);
-    const [pickedFromDisplay, setPickedFromDisplay] = useState<{ lat: number; lon: number; id: string; name: string } | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [currentCity, setCurrentCity] = useState("shenzhen");
+
+    // 【架构优化 P3-1】沙盘逻辑提取到独立 Hook
+    const {
+        isSandboxMode, sandboxCenters, sandboxRadius, sandboxCompareMode,
+        roiDatas, radarSweepActive, radarSweepRadius, roiLoading, roiError,
+        toggleSandbox, closeSandbox, handleToggleCompareMode,
+        handleMapClick, handleRadiusChange,
+    } = useSandbox({ currentCity });
+
+    // 【架构优化 P3-2】航线选点逻辑提取到独立 Hook
+    const { pickedFromDisplay, handleDemandPick } = useFlightPicking({
+        currentCity, isSandboxMode, showToast
+    });
+
     const [hoverInfo, setHoverInfoState] = useState<any>(null);
     // ==========================================
     // 渲染闭环稳定性防护：悬停状态频率节流
@@ -89,7 +89,6 @@ export default function MapContainer() {
         }
         hoverInfoRef.current = info;
     }, []);
-    const [currentCity, setCurrentCity] = useState("shenzhen");
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
 
     // 将 zoom 量化为 0.5 级阶梯，只有跨阶梯时才触发依赖 zoom 的图层重建
@@ -100,7 +99,7 @@ export default function MapContainer() {
     // 【新增】用于脱离 React 生命周期的独立锁机跟拍状态
     const trackingStateRef = useRef<{ isTracking: boolean, lockedFlight: any | null }>({ isTracking: false, lockedFlight: null });
 
-    const { windSpeed } = useWindSpeed();
+    const { windSpeed } = useEnvironment();
     const { pushAlert } = useAlerts();
 
     const {
@@ -224,172 +223,6 @@ export default function MapContainer() {
         loadCityData(city, () => setSelectedFlight(null));
     }, [loadCityData]);
 
-    const handleMapClick = useCallback((info: any) => {
-        if (!isSandboxMode || !info.coordinate) return;
-        const [lon, lat] = info.coordinate;
-        
-        setSandboxCenters(prev => {
-            const next = sandboxCompareMode ? [...prev, { lat, lon }] : [{ lat, lon }];
-            if (next.length > 2) return next.slice(next.length - 2); // 保持最多2个(A/B)
-            return next;
-        });
-
-        // 触发刚落地的激光雷达扫描波纹
-        setRadarSweepActive(true);
-        setRadarSweepRadius(0);
-        let currR = 0;
-        const step = sandboxRadius / 45; // 约45帧内放好
-        const runSweep = () => {
-            currR += step * (1 + (currR / sandboxRadius) * 2); // ease-in/out
-            if (currR >= sandboxRadius) {
-                setRadarSweepRadius(sandboxRadius);
-                setTimeout(() => setRadarSweepActive(false), 300); // 留存0.3s后消失
-            } else {
-                setRadarSweepRadius(currR);
-                requestAnimationFrame(runSweep);
-            }
-        };
-        requestAnimationFrame(runSweep);
-
-        setRoiLoading(true);
-        setRoiError(null);
-
-        const token = localStorage.getItem('token');
-        fetch('/api/analysis/roi', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': token ? `Bearer ${token}` : ''
-            },
-            body: JSON.stringify({
-                city: currentCity,
-                lat, lon,
-                radius_m: sandboxRadius
-            }),
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.ok) {
-                setRoiDatas(prev => {
-                    const next = sandboxCompareMode ? [...prev, data] : [data];
-                    if (next.length > 2) return next.slice(next.length - 2);
-                    return next;
-                });
-            } else {
-                setRoiError(data.error || '分析失败');
-            }
-        })
-        .catch(e => setRoiError(`请求失败: ${e.message}`))
-        .finally(() => setRoiLoading(false));
-    }, [isSandboxMode, currentCity, sandboxRadius, sandboxCompareMode]);
-
-    const handleRadiusChange = useCallback((newRadius: number) => {
-        setSandboxRadius(newRadius);
-        if (sandboxCenters.length > 0) {
-            setRoiLoading(true);
-            setRoiError(null);
-            const token = localStorage.getItem('token');
-            
-            // 重新计算全部站点的 ROI
-            Promise.all(sandboxCenters.map(center => 
-                fetch('/api/analysis/roi', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    },
-                    body: JSON.stringify({
-                        city: currentCity,
-                        lat: center.lat, lon: center.lon,
-                        radius_m: newRadius
-                    }),
-                }).then(res => res.json())
-            ))
-            .then(results => {
-                const newDatas = results.map(r => r.ok ? r : null).filter(Boolean);
-                setRoiDatas(newDatas);
-                if (newDatas.length < results.length) {
-                    setRoiError('部分分析失败');
-                }
-            })
-            .catch(e => setRoiError(`请求失败: ${e.message}`))
-            .finally(() => setRoiLoading(false));
-        }
-    }, [sandboxCenters, currentCity]);
-
-    const handleDemandPick = useCallback((info: any) => {
-        // 沙盘模式下屏蔽正常的 POI 点击
-        if (isSandboxMode) return;
-        
-        if (!info.object) return;
-        const feat = info.object;
-        const coords = feat.geometry?.coordinates;
-        if (!coords) return;
-        const [lon, lat] = coords;
-        const props = feat.properties || {};
-        const picked = { lat, lon, id: String(props.poi_id || props.osm_id || ''), name: props.name || '' };
-
-        if (!pickedFromRef.current) {
-            // 第一次点击：选起点
-            pickedFromRef.current = picked;
-            setPickedFromDisplay(picked);
-            showToast(`已选择起点：${picked.name || picked.id}，请点击另一个点作为终点`, 'info');
-        } else {
-            // 第二次点击：选终点，自动调用 API 生成轨迹
-            const from = pickedFromRef.current;
-
-            // 如果点击同一个点，则取消选择
-            if (from.id === picked.id) {
-                pickedFromRef.current = null;
-                setPickedFromDisplay(null);
-                showToast(`已取消选择`, 'info');
-                return;
-            }
-
-            pickedFromRef.current = null;
-            setPickedFromDisplay(null);
-
-            showToast(`正在提交到 ${picked.name || picked.id} 的任务审批...`, 'loading');
-
-            // 异步调用 tasks API 提交调度任务（状态：PENDING等待审批）
-            const token = localStorage.getItem('token');
-            fetch('/api/tasks', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                },
-                body: JSON.stringify({
-                    city: currentCity,
-                    from_lat: from.lat, from_lon: from.lon, from_id: from.id,
-                    to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id
-                }),
-            })
-                .then(async r => {
-                    const text = await r.text();
-                    try {
-                        const data = JSON.parse(text);
-                        return { data };
-                    } catch (err) {
-                        if (r.status === 504 || r.status === 502) {
-                            throw new Error("后台算法服务未启动 (网关超时)，请确保运行了 python server.py");
-                        }
-                        throw new Error(`非预期的服务器响应 (状态码 ${r.status})`);
-                    }
-                })
-                .then(({ data }) => {
-                    if (data.ok) {
-                        showToast(`🚀 任务提交成功！已进入待审批状态 (ID: ${data.task_id.substring(0,8)})`, 'success');
-                    } else {
-                        showToast(`提交失败：${data.error || data.message || '未知错误'}`, 'error');
-                    }
-                })
-                .catch((e) => {
-                    showToast(`请求失败：${e.message}`, 'error');
-                });
-        }
-    }, [currentCity, setTrajectories, showToast]);
-
     const handleMapLoad = useCallback(() => {
         const map = mapRef.current?.getMap();
         if (!map) return;
@@ -475,14 +308,11 @@ export default function MapContainer() {
                     onOpenAnalytics={() => setIsAnalyticsOpen(true)} 
                     onOpenTasks={() => setIsTasksOpen(true)} 
                     onToggleSandbox={() => {
-                        setIsSandboxMode(prev => {
-                            const newMode = !prev;
-                            if (!newMode) {
-                                setSandboxCenters([]);
-                                setRoiDatas([]);
-                            }
-                            return newMode;
-                        });
+                        if (isSandboxMode) {
+                            closeSandbox();
+                        } else {
+                            toggleSandbox();
+                        }
                     }}
                     isSandboxMode={isSandboxMode}
                     currentCity={currentCity} 
@@ -497,20 +327,9 @@ export default function MapContainer() {
                         error={roiError}
                         radius={sandboxRadius}
                         isCompareMode={sandboxCompareMode}
-                        onToggleCompareMode={(isCompare) => {
-                            setSandboxCompareMode(isCompare);
-                            if (!isCompare) {
-                                // 切换回单点模式，只保留最新一个落点
-                                setSandboxCenters(prev => prev.length > 1 ? [prev[prev.length - 1]] : prev);
-                                setRoiDatas(prev => prev.length > 1 ? [prev[prev.length - 1]] : prev);
-                            }
-                        }}
+                        onToggleCompareMode={handleToggleCompareMode}
                         onRadiusChange={handleRadiusChange}
-                        onClose={() => {
-                            setIsSandboxMode(false);
-                            setSandboxCenters([]);
-                            setRoiDatas([]);
-                        }}
+                        onClose={closeSandbox}
                     />
                 )}
 

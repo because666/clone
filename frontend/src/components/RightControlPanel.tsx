@@ -3,10 +3,9 @@ import {
   Activity, ShieldAlert, Zap, Wind, Sun, Cloud, CloudRain, 
   CloudSnow, CloudLightning, BatteryWarning
 } from 'lucide-react';
-import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
+import type { WeatherType } from '../contexts/EnvironmentContext';
 import { useAlerts } from './AlertNotificationProvider';
-import { useWeather } from '../contexts/WeatherContext';
-import type { WeatherType } from '../contexts/WeatherContext';
 
 const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] = [
     { type: 'sunny', icon: <Sun size={14} />, label: '晴天' },
@@ -17,9 +16,8 @@ const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] =
 ];
 
 export default function RightControlPanel() {
-    const { windSpeed, setWindSpeed } = useWindSpeed();
+    const { windSpeed, setWindSpeed, weather, setWeather, temperature, setTemperature } = useEnvironment();
     const { alerts, totalCounts } = useAlerts();
-    const { weather, setWeather, temperature, setTemperature } = useWeather();
     const [isCollapsed, setIsCollapsed] = useState(true);
 
     const getWeatherIcon = () => {

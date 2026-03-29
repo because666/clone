@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/语言-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
     <img src="https://img.shields.io/badge/渲染引擎-Deck.gl-FFF?logo=uber" alt="Deck.gl" />
     <img src="https://img.shields.io/badge/地图底座-Mapbox-000000?logo=mapbox&logoColor=white" alt="Mapbox" />
-    <img src="https://img.shields.io/badge/后端调度-FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/后端调度-Flask-000000?logo=flask&logoColor=white" alt="Flask" />
     <img src="https://img.shields.io/badge/存储-SQLite_持久化-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
     <img src="https://img.shields.io/badge/算法-A*_避障-FF9800" alt="Algorithm" />
     <img src="https://img.shields.io/badge/License-MIT-blue" alt="License" />
@@ -73,7 +73,7 @@
 
 - 🚀 **高密度三维渲染**: 采用 `Deck.gl` 的 Binary 渲染模式与自定义 `TypedArray` 限制内存分配频率，减少 GC 卡顿。配合 LOD 优化限制不可见区域开销，系统可稳定支持 500+ 架并发 UAV 和 10 万+ 轨迹节点的高帧率大屏渲染。
 - 🧠 **三维动态避障与寻路**: 后端算法应用 0.0005° 精度网格进行空间建模和线段碰撞检测，实现规避真实建筑群与多边形禁飞区的三维航线规划，支持动态地形高程匹配与路径点平滑过滤。
-- ⚡️ **全链路流式调度推送**: 建立后端请求鉴权与状态机流转。通过 `FastAPI` 搭载 Server-Sent Events (SSE) 协议向下游大盘推送状态流，单向高频数据结合前端双层缓冲区（Double Buffering）合并更新，减少频繁的 DOM 重绘开销。
+- ⚡️ **全链路流式调度推送**: 建立后端请求鉴权与状态机流转。通过 `Flask` 搭载 Server-Sent Events (SSE) 协议向下游大盘推送状态流，单向高频数据结合前端双层缓冲区（Double Buffering）合并更新，减少频繁的 DOM 重绘开销。
 - 🛡 **环境仿真与异常预警**: 系统集成气温、多种天气及风场等仿真参数联动模型。无人机航线与划定禁飞区产生空间交集，或受气温载重影响导致续航电量不足时，系统会自动计算剩余余量并在界面生成 UI 预警标签。
 - 🔐 **权限隔离与持久化审查**: 采用 `JWT` 角色管控架构区分大盘展示与后台派发权限。核心业务流水、飞行轨迹点与操作者派送指令均实时写入 `SQLite/PostgreSQL` 数据库，保障记录不可篡改以备朔源审查。
 - 📊 **空域数据聚合与分析**: 内置基于 `ECharts` 构建的统计面板组件。聚合运行时间线内的派送状态等结构化数据，展示分时段起降热力分布、空域运力负载趋势与能耗使用统计，作为非实时情况判断的辅助。
@@ -97,7 +97,7 @@ flowchart TD
     Render[🗺️ MapBox + Deck.gl 引擎]:::frontend
 
     %% 服务网关层
-    API[🔌 FastAPI 核心业务 API]:::middleware
+    API[🔌 Flask 核心业务 API]:::middleware
     Push[📡 SSE 异步单向推送通道]:::middleware
 
     %% 后端算法底座
@@ -150,11 +150,11 @@ python -m venv venv
 # 激活环境 (Windows 用户运行: .\venv\Scripts\activate)
 source venv/bin/activate
 
-cd backend
+cd trajectory_lab
 # 安装依赖并启动
 pip install -r requirements.txt
-python main.py  
-# 后端服务已运行在 http://localhost:8000
+python scripts/server.py
+# 后端服务已运行在 http://localhost:5001
 ```
 
 **步骤二：启动前端大屏面板**
@@ -163,24 +163,30 @@ python main.py
 cd frontend
 npm install
 npm run dev     
-# 访问 http://localhost:3000 查看 3D 面板
+# 访问 http://localhost:5173 查看 3D 面板
 ```
 
 ## 📚 目录结构导览
 
 ```text
 AetherWeave/
-├── frontend/             # 浏览器 3D 可视化端 (React + Typescript)
+├── frontend/                 # 浏览器 3D 可视化端 (React 19 + TypeScript + Vite)
 │   ├── src/
-│   │   ├── components/   # UI 与 Deck.gl 图层组件
-│   │   ├── hooks/        # 数据流向与状态管理
-│   │   └── utils/        # ArrayBuffer 性能优化模块
-│   └── public/           # 静态纹理及数据存放
-├── backend/              # 实时调度引擎 (Python + FastAPI)
-│   ├── core/             # A* 空域避障及调度引擎计算
-│   └── api/              # SSE 推送路由与 HTTP API
-├── trajectory_lab/       # 算法脚本实验室 (用于生成和验证航线数据)
-└── docs/                 # 技术文档与架构说明
+│   │   ├── components/       # UI 与 Deck.gl 图层组件
+│   │   ├── contexts/         # 全局状态管理 (认证、环境仿真)
+│   │   ├── hooks/            # 数据流向与状态管理 (动画、图层、SSE)
+│   │   ├── features/         # 独立功能模块 (引导、加载进度)
+│   │   ├── types/            # TypeScript 类型定义
+│   │   └── utils/            # ArrayBuffer 性能优化与工具函数
+│   └── public/               # 3D 模型、静态纹理及 GeoJSON 数据
+├── trajectory_lab/           # 后端服务与算法引擎 (Python + Flask)
+│   ├── scripts/server.py     # Flask 主服务 (认证、调度、SSE、ROI 分析)
+│   ├── core/                 # A* 空域避障、NFZ 碰撞检测、POI 匹配
+│   ├── models/               # SQLAlchemy ORM 模型 (用户、任务)
+│   └── tests/                # 后端单元测试
+├── scripts/                  # 数据处理工具 (轨迹生成、能耗建模、城市数据获取)
+├── data/                     # 原始数据与处理后数据 (GeoJSON, CSV)
+└── docs/                     # 技术文档与架构说明
 ```
 
 

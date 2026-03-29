@@ -95,12 +95,16 @@ export function useMapLayers({
             filled: true,
             lineWidthMinPixels: 1,
             getPointRadius: 45,
-            pointRadiusMinPixels: 4,
+            pointRadiusMinPixels: 5,
             getFillColor: (d: any) => {
-                if (pickedFromDisplay && d.properties?.poi_id === pickedFromDisplay.id) return [52, 255, 100, 255];
-                return [52, 211, 153, 140];
+                if (pickedFromDisplay && d.properties?.poi_id === pickedFromDisplay.id) return [52, 255, 100, 40];
+                return [52, 211, 153, 25];
             },
-            getLineColor: [5, 150, 105, 220],
+            getLineColor: (d: any) => {
+                if (pickedFromDisplay && d.properties?.poi_id === pickedFromDisplay.id) return [52, 255, 100, 255];
+                return [16, 185, 129, 230];
+            },
+            getLineWidth: 3,
             pickable: true,
             autoHighlight: true,
             highlightColor: [255, 220, 50, 220],
@@ -141,10 +145,10 @@ export function useMapLayers({
             pickable: true,
             elevationScale: 1,
             wireframe: z > 11.5,
-            getLineWidth: z > 11.5 ? 2 : 0,
+            getLineWidth: z > 11.5 ? 3 : 0,
             getPosition: (d: any) => d.geometry.coordinates,
-            getFillColor: [255, 60, 60, fillAlpha],
-            getLineColor: [255, 80, 80, lineAlpha],
+            getFillColor: [239, 68, 68, Math.round(fillAlpha * 0.4)],
+            getLineColor: [248, 113, 113, lineAlpha],
             getElevation: 400,
         });
     }, [sensitivePoints, quantizedZoom]);

@@ -1,11 +1,9 @@
 import { useEffect, useRef, memo } from 'react';
-import { useWeather } from '../contexts/WeatherContext';
-import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 
 // 【竞赛加分 BONUS-2】React.memo 包裹，仅受 weather/windSpeed 影响
 const WeatherOverlay = memo(function WeatherOverlay() {
-    const { weather } = useWeather();
-    const { windSpeed } = useWindSpeed();
+    const { weather, windSpeed } = useEnvironment();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     // 【Bug 修复】用 ref 存储 animationFrameId，避免清理时捕获闭包旧值导致残留动画
     const animFrameIdRef = useRef<number>(0);
