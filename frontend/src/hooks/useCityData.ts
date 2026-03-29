@@ -270,7 +270,7 @@ export function useCityData(): UseCityDataReturn {
                             trajectories: UAVPath[];
                             timeRange: { min: number; max: number };
                         }>(
-                            `/data/processed/trajectories/${city}_uav_trajectories.json`,
+                            `/api/trajectories?city=${city}`,
                             'trajectories',
                             signal
                         );
@@ -367,7 +367,7 @@ export function useCityData(): UseCityDataReturn {
     const reloadCurrentTrajectories = useCallback(async (): Promise<UAVPath[]> => {
         const city = currentCityRef.current;
         try {
-            const tRes = await fetch(`/data/processed/trajectories/${city}_uav_trajectories.json`)
+            const tRes = await fetch(`/api/trajectories?city=${city}`)
                 .then(r => r.ok ? r.json() : null).catch(() => null);
             if (tRes) {
                 const newTrajs = tRes.trajectories || [];

@@ -16,16 +16,21 @@ export const activeUAVTrajectories: any[] = new Array(MAX_UAVS);
 
 export let activeUAVCount = 0;
 
+// 预计算常量，消除热路径中的除法运算
+const RAD2DEG = 180 / Math.PI;
+// 查表法：预生成 00-99 的两位数字符串，消除 padStart 的每帧字符串分配
+const DIGITS: string[] = [];
+for (let i = 0; i < 100; i++) DIGITS[i] = i < 10 ? '0' + i : '' + i;
+
 const getSegAngle = (path: [number, number, number][], seg: number) => {
     const a = path[seg];
     const b = path[seg + 1];
-    return (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI;
+    return Math.atan2(b[0] - a[0], b[1] - a[1]) * RAD2DEG;
 };
 
+// 【性能优化】确定性角度插值：用数学公式替代 while 循环，消除不可预测的分支跳转
 const lerpAngle = (a: number, b: number, t: number) => {
-    let diff = b - a;
-    while (diff > 180) diff -= 360;
-    while (diff < -180) diff += 360;
+    const diff = ((b - a) % 360 + 540) % 360 - 180;
     return a + diff * t;
 };
 
@@ -71,7 +76,7 @@ export function updateActiveUAVsBuffer(trajectories: UAVPath[], currentGlobalTim
             let left = 0;
             let right = times.length - 2;
             while (left <= right) {
-                const mid = Math.floor((left + right) / 2);
+                const mid = (left + right) >> 1; // 位运算替代 Math.floor
                 if (expectedT >= times[mid] && expectedT <= times[mid + 1]) {
                     segIdx = mid;
                     break;
@@ -138,9 +143,10 @@ export function updateActiveUAVsBuffer(trajectories: UAVPath[], currentGlobalTim
     activeUAVCount = activeCount;
 }
 
+// 【性能优化】查表法格式化：消除 padStart 每帧创建的临时字符串对象
 export function formatElapsed(seconds: number): string {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const h = (seconds / 3600) | 0;
+    const m = ((seconds % 3600) / 60) | 0;
+    const s = (seconds % 60) | 0;
+    return DIGITS[h] + ':' + DIGITS[m] + ':' + DIGITS[s];
 }

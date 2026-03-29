@@ -533,7 +533,9 @@ export default function MapContainer() {
             currentTime: currentTimeRef.current,
             shadowEnabled: false,
             opacity: layerOpacity,
-            pickable: true,
+            // 【性能优化】拖尾层关闭拾取：500+ 条轨迹的拾取 framebuffer 是 GPU 性能黑洞
+            // 用户通过点击 UAV 模型/散点选中无人机，无需在拖尾上拾取
+            pickable: false,
             updateTriggers: {
                 getColor: energyData
             }

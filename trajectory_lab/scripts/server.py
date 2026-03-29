@@ -9,6 +9,7 @@ import json
 import random
 import logging
 import time
+import uuid
 import argparse
 from pathlib import Path
 
@@ -26,7 +27,7 @@ except ImportError:
     print("缺少依赖，请运行: pip install flask flask-cors flask-compress pyjwt")
     sys.exit(1)
 
-from trajectory_lab.models.user import db, User, AuditLog, Task
+from trajectory_lab.models.user import db, User, AuditLog, Task, FlightLog
 
 from trajectory_lab.core.poi_loader import load_city_pois
 from trajectory_lab.core.planner import plan
@@ -263,12 +264,34 @@ def batch_generate():
         )
         results.append(result)
 
-    # 写文件
+    # 写文件（保留静态 JSON 兜底）
     OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
     data = build_output(results, city)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f, separators=(",", ":"))
+
+    # 双写策略：同步写入数据库持久化
+    batch_id = str(uuid.uuid4())
+    # 先清空该城市旧数据，保证幂等
+    FlightLog.query.filter_by(city=city).delete()
+    cycle_dur = data.get("cycleDuration", 0)
+    algo_name = data.get("_meta", {}).get("algo", "unknown")
+    for traj_item in data["trajectories"]:
+        if traj_item["id"].endswith("_ghost"):
+            continue  # ghost 镜像不入库，查询时动态计算
+        flight_log = FlightLog(
+            city=city,
+            flight_id=traj_item["id"],
+            path_data=json.dumps(traj_item["path"]),
+            timestamps_data=json.dumps(traj_item["timestamps"]),
+            start_offset=traj_item.get("start_offset", 0.0),
+            algo=algo_name,
+            batch_id=batch_id,
+        )
+        db.session.add(flight_log)
+    db.session.commit()
+    logger.info(f"[batch] 已写入数据库, batch_id={batch_id}")
 
     elapsed = time.time() - t0
     total_violations = sum(r.nfz_violations for r in results)
@@ -281,6 +304,7 @@ def batch_generate():
         "total_violations": total_violations,
         "elapsed_s": round(elapsed, 2),
         "output": str(out_path),
+        "batch_id": batch_id,
     })
 
 
@@ -535,6 +559,86 @@ def update_task_status(task_id):
     log_audit("UPDATE_TASK_STATUS", resource="tasks", details={"task_id": task.id, "new_status": new_status})
 
     return jsonify({"ok": True, "task_id": task.id, "status": task.status})
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Trajectory Data (飞行轨迹持久化查询)
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route("/api/trajectories", methods=["GET"])
+def get_trajectories():
+    """从数据库获取城市的持久化飞行轨迹，返回前端期望的标准格式"""
+    city = request.args.get("city", "shenzhen")
+
+    logs = FlightLog.query.filter_by(city=city).order_by(FlightLog.created_at).all()
+
+    if not logs:
+        # 数据库无数据时，回退读取静态 JSON 文件作为兜底
+        json_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
+        if json_path.exists():
+            with open(json_path, "r", encoding="utf-8") as f:
+                return jsonify(json.load(f))
+        return jsonify({"error": f"No trajectory data found for {city}"}), 404
+
+    # 计算平均飞行时长和 cycleDuration（与 build_output 算法一致）
+    total_dur = 0.0
+    valid_count = 0
+    for log in logs:
+        ts = json.loads(log.timestamps_data)
+        if len(ts) >= 2:
+            total_dur += ts[-1] - ts[0]
+            valid_count += 1
+    avg_dur = total_dur / valid_count if valid_count > 0 else 0.0
+    cycle_duration = max((valid_count * avg_dur) / 500, avg_dur * 1.5) if valid_count > 0 else 3600.0
+
+    # 重建前端期望的 JSON 格式
+    trajectories = []
+    for log in logs:
+        path = json.loads(log.path_data)
+        timestamps = json.loads(log.timestamps_data)
+        traj = {
+            "id": log.flight_id,
+            "path": path,
+            "timestamps": timestamps,
+            "start_offset": log.start_offset or 0.0,
+        }
+        trajectories.append(traj)
+
+        # 动态补充 ghost 镜像实现无缝循环（不从数据库读，实时计算）
+        if timestamps and timestamps[-1] > cycle_duration:
+            ghost_ts = [round(t - cycle_duration, 3) for t in timestamps]
+            trajectories.append({
+                "id": f"{log.flight_id}_ghost",
+                "path": path,
+                "timestamps": ghost_ts,
+                "start_offset": round((log.start_offset or 0.0) - cycle_duration, 3),
+            })
+
+    all_max_ts = max(
+        (t["timestamps"][-1] for t in trajectories if t["timestamps"]),
+        default=0
+    )
+
+    return jsonify({
+        "timeRange": {"min": 0, "max": round(max(all_max_ts, cycle_duration), 3)},
+        "cycleDuration": round(cycle_duration, 3),
+        "totalFlights": len(trajectories),
+        "sampledFlights": len(trajectories),
+        "trajectories": trajectories,
+    })
+
+
+@app.route("/api/trajectories", methods=["DELETE"])
+@role_required('ADMIN')
+def delete_trajectories():
+    """清空指定城市的所有持久化轨迹数据"""
+    city = request.args.get("city")
+    if not city:
+        return jsonify({"error": "Missing city parameter"}), 400
+    deleted = FlightLog.query.filter_by(city=city).delete()
+    db.session.commit()
+    log_audit("DELETE_TRAJECTORIES", resource="flight_logs", details={"city": city, "deleted": deleted})
+    return jsonify({"ok": True, "deleted": deleted})
 
 
 # ═══════════════════════════════════════════════════════════════════════
