@@ -2,7 +2,7 @@
   <!-- 💡 占位符：项目精美 Logo -->
   <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="200" />
 
-  <h1> AetherWeave|苍穹织网 </h1>
+  <h1> AetherWeave | 苍穹织网 </h1>
   <p><strong>面向未来城市的低空物流 3D 实时调度与监控中枢</strong></p>
 
   <!-- 💡 占位符：各类状态徽章，可以根据实际情况在 shields.io 调整 -->
@@ -75,24 +75,53 @@
 > 💡 **架构图提示**: 以下是由 Mermaid 驱动的架构图，能够直观展示我们全栈的流转闭环。您可以在本地将其导出为图片后替换，或直接保留在 Markdown 中由 Git 平台原生接管渲染。
 
 ```mermaid
-graph TD
-    subgraph Frontend ["前端 3D 渲染与交互网关层 (React + Deck.gl)"]
-        A[MapBox 3D 底图引擎] --> B(Deck.gl 可视化管线)
-        B <==>|原生二进制流转| C{TypedArray 零分配内存池}
-        D[大屏面板 / AI 预审输入] -.->|请求防抖与指令生成| E(Hook 状态机)
+flowchart TD
+    %% 样式表 (轻量工业风与柔和对比)
+    classDef frontend fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px,rx:5px,color:#0D47A1
+    classDef middleware fill:#FFF3E0,stroke:#EF6C00,stroke-width:1.5px,rx:5px,color:#E65100
+    classDef backend fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px,rx:5px,color:#1B5E20
+    classDef database fill:#ECEFF1,stroke:#455A64,stroke-width:1.5px,color:#263238
+
+    %% ============ 节点实体 ============
+    %% 前端层
+    UI[🖥️ 监控视图与 AI 调度台]:::frontend
+    Hook[📌 交互防抖与状态机]:::frontend
+    Pool[⚡ TypedArray 零分配缓冲]:::frontend
+    Render[🗺️ MapBox + Deck.gl 引擎]:::frontend
+
+    %% 服务网关层
+    API[🔌 FastAPI 核心业务 API]:::middleware
+    Push[📡 SSE 异步单向推送通道]:::middleware
+
+    %% 后端算法底座
+    Engine[🧠 中央空域调度与风控中枢]:::backend
+    Planner[📍 A* 动态避障与时空解算]:::backend
+    DB[(🗄️ PgSQL / SQLite 安全落盘)]:::database
+
+    %% ============ 系统分层图块 ============
+    subgraph Client ["「表现层」 大屏视界与高并发管控端"]
+        UI -.->|"动作拦截"| Hook
+        Pool ===>|"底层指针复用"| Render
     end
 
-    subgraph Middleware ["实时微服务总线与推送引擎"]
-        F((SSE 极速推送集群)) ===>|单向百万级事件推送| C
-        E -.->|REST / WebSocket| G[FastAPI 核心网关]
+    subgraph Gateway ["「服务层」 读写分离分流网关"]
+        API
+        Push
     end
 
-    subgraph Backend ["算法中枢与持久化底座"]
-        G --> H{核心调度器引擎}
-        H <--> I[AI 航线风险预审]
-        H <--> J[A* v4 三维轨迹寻路算法]
-        J <===> K[(SQLite / PostgreSQL 持久化)]
+    subgraph Server ["「底座层」 时空算法引擎与预警研判"]
+        Engine <-->|"派单与调拨"| Planner
+        Planner <==>|"数据持久化"| DB
     end
+
+    %% ============ 核心数据流转 ============
+    %% 1. 上行业务链路 (Action Flow)
+    Hook -- "REST 指令流" --> API
+    API -- "解包与鉴权" --> Engine
+
+    %% 2. 下行渲染心跳流 (Render Flow)
+    Engine =="时空全域状态同步"==> Push
+    Push =="流控合并注入免 GC 缓冲"==> Pool
 ```
 
 ## 🚀 快速上手
@@ -149,16 +178,9 @@ AetherWeave/
 └── docs/                 # 📖 协议定案、架构决策（ADR）与深度解析
 ```
 
-## 🛠 国奖冲刺与开发路线图 (Roadmap)
 
-我们正处于向国家级大奖发起冲刺的高速迭代期。
-每一项突破性特性的研发轨距，均记录在 [国奖冲刺路线图 (`national_award_roadmap.md`)](./national_award_roadmap.md) 中。
 
-如果您有意以代码形式参与“苍穹织网”的演进，请遵循：
-1. 提交前确保通过所有的 `lint` 静态检验。
-2. 切记：在处理前端海量点阵数据时，**始终保持对大量内存分配引发 GC 造成的卡顿的绝对敏感**。
-
-## 荣誉与团队成员
+## 团队成员
 
 > 💡 **占位提示**: 这里请写入各位团队成员的名字、主要负责模块、指导老师姓名以及已获奖项。
 - **项目指导**：[杨正益]
