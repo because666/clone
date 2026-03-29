@@ -24,4 +24,33 @@ export default defineConfig({
       },
     },
   },
+  esbuild: {
+    // 生产环境自动去除 console 和 debugger 减小体积
+    drop: ['console', 'debugger'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // 核心：基于包特性的手动分包策略 (Manual Chunks)
+        manualChunks: (id) => {
+          // React 及其生态包，这类包更新低频且多页通用
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
+            return 'react-vendor';
+          }
+          // 地理底层引擎引擎及相关包装器（体积巨大，往往数 Mb）
+          if (id.includes('node_modules/deck.gl') || id.includes('node_modules/@deck.gl') || id.includes('node_modules/maplibre-gl') || id.includes('node_modules/react-map-gl')) {
+            return 'map-vendor';
+          }
+          // 图表渲染引擎包
+          if (id.includes('node_modules/echarts') || id.includes('node_modules/zrender')) {
+            return 'chart-vendor';
+          }
+          // D3 计算模块和其余所有的第三方轮子
+          if (id.includes('node_modules/d3-')) {
+            return 'd3-vendor';
+          }
+        }
+      }
+    }
+  }
 })

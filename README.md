@@ -53,9 +53,17 @@
       </td>
       <!-- 模块 2：AI 面板（等待开发） -->
       <td align="center">
-        <img src="https://via.placeholder.com/600x380/1e293b/0ea5e9?text=[+WIP+]+AI+Dispatch+Module" alt="自然语言指令调度(研发中)"/><br/>
+        <img src="https://via.placeholder.com/600x380/1e293b/0ea5e9?text=[+WIP+]+AI+Dispatch+Module" alt="自然语言指令调度(研发中)" style="width: 100%;"/><br/>
         <b>👆 🚧 预留：AI 智能体大模型联控台</b><br/>
         <sub>解析模糊自然语言意图，触发底盘秒级空域避障调度重播</sub>
+      </td>
+    </tr>
+    <tr>
+      <!-- 模块 3：ROI 沙盘 -->
+      <td align="center" colspan="2">
+        <img src="docs/assets/ROI.png" alt="基建 ROI 沙盘 DSS 决策系统" style="width: 80%; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); margin-top: 10px;"/><br/>
+        <br/><b>👆 🗺️ 基建 ROI 沙盘 (DSS 辅助决策引擎)</b><br/>
+        <sub>支持双点 A/B 博弈、财务闭环测算与 3D 雷达激波渲染，赋能城市低空基建选址规划</sub>
       </td>
     </tr>
   </table>

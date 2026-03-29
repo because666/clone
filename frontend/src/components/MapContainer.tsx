@@ -20,6 +20,7 @@ const AnalyticsPanel = lazy(() => import('./AnalyticsPanel'));
 // 【性能优化】TaskManagementPanel ~30KB 最大组件，默认隐藏，延迟加载减少首屏 bundle
 const TaskManagementPanel = lazy(() => import('./TaskManagementPanel'));
 import DashboardOverlay from './DashboardOverlay';
+import RoiSandboxCard from './RoiSandboxCard';
 import { binarySearchTimestamp } from '../utils/physics';
 import { StepProgress } from '../features/LoadingProgress/StepProgress';
 import { ErrorAlert } from './ErrorAlert';
@@ -47,6 +48,20 @@ export default function MapContainer() {
     const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
     const [isTasksOpen, setIsTasksOpen] = useState(false);
     const [toastState, setToastState] = useState<{ msg: string, type: 'info' | 'success' | 'error' | 'loading' } | null>(null);
+
+    // Sandbox states
+    const [isSandboxMode, setIsSandboxMode] = useState(false);
+    const [sandboxCenters, setSandboxCenters] = useState<{lat: number, lon: number}[]>([]);
+    const [sandboxRadius, setSandboxRadius] = useState(3000);
+    const [roiDatas, setRoiDatas] = useState<any[]>([]);
+    const [sandboxCompareMode, setSandboxCompareMode] = useState(false);
+    
+    // 雷达图层动画状态
+    const [radarSweepActive, setRadarSweepActive] = useState(false);
+    const [radarSweepRadius, setRadarSweepRadius] = useState(0);
+
+    const [roiLoading, setRoiLoading] = useState(false);
+    const [roiError, setRoiError] = useState<string | null>(null);
 
     const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'loading' = 'info') => {
         setToastState({ msg, type });
@@ -209,7 +224,103 @@ export default function MapContainer() {
         loadCityData(city, () => setSelectedFlight(null));
     }, [loadCityData]);
 
+    const handleMapClick = useCallback((info: any) => {
+        if (!isSandboxMode || !info.coordinate) return;
+        const [lon, lat] = info.coordinate;
+        
+        setSandboxCenters(prev => {
+            const next = sandboxCompareMode ? [...prev, { lat, lon }] : [{ lat, lon }];
+            if (next.length > 2) return next.slice(next.length - 2); // 保持最多2个(A/B)
+            return next;
+        });
+
+        // 触发刚落地的激光雷达扫描波纹
+        setRadarSweepActive(true);
+        setRadarSweepRadius(0);
+        let currR = 0;
+        const step = sandboxRadius / 45; // 约45帧内放好
+        const runSweep = () => {
+            currR += step * (1 + (currR / sandboxRadius) * 2); // ease-in/out
+            if (currR >= sandboxRadius) {
+                setRadarSweepRadius(sandboxRadius);
+                setTimeout(() => setRadarSweepActive(false), 300); // 留存0.3s后消失
+            } else {
+                setRadarSweepRadius(currR);
+                requestAnimationFrame(runSweep);
+            }
+        };
+        requestAnimationFrame(runSweep);
+
+        setRoiLoading(true);
+        setRoiError(null);
+
+        const token = localStorage.getItem('token');
+        fetch('/api/analysis/roi', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : ''
+            },
+            body: JSON.stringify({
+                city: currentCity,
+                lat, lon,
+                radius_m: sandboxRadius
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.ok) {
+                setRoiDatas(prev => {
+                    const next = sandboxCompareMode ? [...prev, data] : [data];
+                    if (next.length > 2) return next.slice(next.length - 2);
+                    return next;
+                });
+            } else {
+                setRoiError(data.error || '分析失败');
+            }
+        })
+        .catch(e => setRoiError(`请求失败: ${e.message}`))
+        .finally(() => setRoiLoading(false));
+    }, [isSandboxMode, currentCity, sandboxRadius, sandboxCompareMode]);
+
+    const handleRadiusChange = useCallback((newRadius: number) => {
+        setSandboxRadius(newRadius);
+        if (sandboxCenters.length > 0) {
+            setRoiLoading(true);
+            setRoiError(null);
+            const token = localStorage.getItem('token');
+            
+            // 重新计算全部站点的 ROI
+            Promise.all(sandboxCenters.map(center => 
+                fetch('/api/analysis/roi', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        city: currentCity,
+                        lat: center.lat, lon: center.lon,
+                        radius_m: newRadius
+                    }),
+                }).then(res => res.json())
+            ))
+            .then(results => {
+                const newDatas = results.map(r => r.ok ? r : null).filter(Boolean);
+                setRoiDatas(newDatas);
+                if (newDatas.length < results.length) {
+                    setRoiError('部分分析失败');
+                }
+            })
+            .catch(e => setRoiError(`请求失败: ${e.message}`))
+            .finally(() => setRoiLoading(false));
+        }
+    }, [sandboxCenters, currentCity]);
+
     const handleDemandPick = useCallback((info: any) => {
+        // 沙盘模式下屏蔽正常的 POI 点击
+        if (isSandboxMode) return;
+        
         if (!info.object) return;
         const feat = info.object;
         const coords = feat.geometry?.coordinates;
@@ -310,6 +421,10 @@ export default function MapContainer() {
         selectedFlight,
         pickedFromDisplay,
         currentTimeRef,
+        sandboxCenters,
+        sandboxRadius,
+        radarSweepActive,
+        radarSweepRadius,
         setSelectedFlight,
         setHoverInfo,
         handleDemandPick,
@@ -345,6 +460,7 @@ export default function MapContainer() {
                     }}
                     layers={layers}
                     onViewStateChange={handleViewStateChange}
+                    onClick={handleMapClick}
                 >
                     <MapGL
                         ref={mapRef}
@@ -355,9 +471,48 @@ export default function MapContainer() {
                     />
                 </DeckGL>
 
-                <DashboardOverlay onOpenAnalytics={() => setIsAnalyticsOpen(true)} onOpenTasks={() => setIsTasksOpen(true)} currentCity={currentCity} />
+                <DashboardOverlay 
+                    onOpenAnalytics={() => setIsAnalyticsOpen(true)} 
+                    onOpenTasks={() => setIsTasksOpen(true)} 
+                    onToggleSandbox={() => {
+                        setIsSandboxMode(prev => {
+                            const newMode = !prev;
+                            if (!newMode) {
+                                setSandboxCenters([]);
+                                setRoiDatas([]);
+                            }
+                            return newMode;
+                        });
+                    }}
+                    isSandboxMode={isSandboxMode}
+                    currentCity={currentCity} 
+                />
 
                 <HoverTooltip hoverInfo={hoverInfo} />
+
+                {isSandboxMode && (
+                    <RoiSandboxCard
+                        data={roiDatas}
+                        isLoading={roiLoading}
+                        error={roiError}
+                        radius={sandboxRadius}
+                        isCompareMode={sandboxCompareMode}
+                        onToggleCompareMode={(isCompare) => {
+                            setSandboxCompareMode(isCompare);
+                            if (!isCompare) {
+                                // 切换回单点模式，只保留最新一个落点
+                                setSandboxCenters(prev => prev.length > 1 ? [prev[prev.length - 1]] : prev);
+                                setRoiDatas(prev => prev.length > 1 ? [prev[prev.length - 1]] : prev);
+                            }
+                        }}
+                        onRadiusChange={handleRadiusChange}
+                        onClose={() => {
+                            setIsSandboxMode(false);
+                            setSandboxCenters([]);
+                            setRoiDatas([]);
+                        }}
+                    />
+                )}
 
                 <FlightDetailPanel
                     selectedFlight={selectedFlight}

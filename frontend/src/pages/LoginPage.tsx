@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
@@ -10,6 +10,15 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // 静默预加载核心业务组件 (Predictive Prefetching)
+  useEffect(() => {
+    // 页面空闲时，请求按需加载图表和 WebGL 相关组件
+    const timer = setTimeout(() => {
+      import('./DashboardPage');
+    }, 1500); // 延迟 1.5 秒等登录页本体加载完毕后再拉取
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

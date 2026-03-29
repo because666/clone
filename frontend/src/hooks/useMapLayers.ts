@@ -24,6 +24,10 @@ interface UseMapLayersParams {
     selectedFlight: any;
     pickedFromDisplay: { lat: number; lon: number; id: string; name: string } | null;
     currentTimeRef: React.MutableRefObject<number>;
+    sandboxCenters: { lat: number; lon: number }[];
+    sandboxRadius: number;
+    radarSweepActive: boolean;
+    radarSweepRadius: number;
     setSelectedFlight: (flight: any) => void;
     setHoverInfo: (info: any) => void;
     handleDemandPick: (info: any) => void;
@@ -45,6 +49,10 @@ export function useMapLayers({
     selectedFlight,
     pickedFromDisplay,
     currentTimeRef,
+    sandboxCenters,
+    sandboxRadius,
+    radarSweepActive,
+    radarSweepRadius,
     setSelectedFlight,
     setHoverInfo,
     handleDemandPick,
@@ -156,12 +164,12 @@ export function useMapLayers({
             id: 'uav-model-layer',
             data: { length: 0 },
             scenegraph: '/dji_spark.glb',
-            getPosition: (_: any, {index}: any) => [
+            getPosition: (_: any, { index }: any) => [
                 uavPositionsBuffer[index * 3 + 0],
                 uavPositionsBuffer[index * 3 + 1],
                 uavPositionsBuffer[index * 3 + 2]
             ],
-            getOrientation: (_: any, {index}: any) => [
+            getOrientation: (_: any, { index }: any) => [
                 uavOrientationsBuffer[index * 3 + 0],
                 uavOrientationsBuffer[index * 3 + 1],
                 uavOrientationsBuffer[index * 3 + 2]
@@ -282,12 +290,85 @@ export function useMapLayers({
         });
     }, [hoverInfo, selectedFlight]);
 
+    // 沙盘静态范围图层
+    const roiRadiusLayer = useMemo(() => {
+        if (!sandboxCenters || sandboxCenters.length === 0) return null;
+        return new ScatterplotLayer({
+            id: 'roi-radius-layer',
+            data: sandboxCenters,
+            getPosition: (d: any) => [d.lon, d.lat],
+            // 站点A使用科技蓝，站点B使用琥珀金
+            getFillColor: (d: any, {index}: any) => index === 0 ? [59, 130, 246, 50] : [245, 158, 11, 50],
+            getLineColor: (d: any, {index}: any) => index === 0 ? [59, 130, 246, 200] : [245, 158, 11, 200],
+            lineWidthMinPixels: 2,
+            stroked: true,
+            filled: true,
+            getRadius: sandboxRadius,
+            pickable: false,
+            updateTriggers: {
+                getRadius: sandboxRadius,
+                getFillColor: sandboxCenters.length,
+                getLineColor: sandboxCenters.length
+            }
+        });
+    }, [sandboxCenters, sandboxRadius]);
+
+    // 沙盘实体 3D 机塔图层
+    const roiCenterModelLayer = useMemo(() => {
+        if (!sandboxCenters || sandboxCenters.length === 0) return null;
+        return new ScenegraphLayer({
+            id: 'roi-center-model-layer',
+            data: sandboxCenters,
+            scenegraph: '/sci-fi_communication_tower.glb',
+            getPosition: (d: any) => [d.lon, d.lat],
+            getOrientation: [0, 0, 90],
+            sizeScale: 40.0,
+            parameters: { depthTest: true, cull: false },
+            // A 使用白底透蓝，B 使用高对比度的耀金
+            getColor: (d: any, {index}: any) => index === 0 ? [240, 248, 255, 255] : [255, 200, 100, 255],
+            pickable: false,
+            updateTriggers: {
+                getOrientation: [0, 0, 90],
+                getColor: sandboxCenters.length
+            },
+            transitions: {
+                getPosition: { duration: 500, type: 'spring', stiffness: 0.1, damping: 0.5 }
+            }
+        });
+    }, [sandboxCenters]);
+
+    // 雷达扫描波图层 - 每次落地时触发激波扩散
+    const radarSweepLayer = useMemo(() => {
+        if (!radarSweepActive || sandboxCenters.length === 0) return null;
+        // 只跟随最后落下的点扩散
+        const lastCenter = sandboxCenters[sandboxCenters.length - 1];
+        const isB = sandboxCenters.length > 1;
+        return new ScatterplotLayer({
+            id: 'radar-sweep-layer',
+            data: [lastCenter],
+            getPosition: (d: any) => [d.lon, d.lat],
+            getFillColor: [0, 0, 0, 0], // 中空
+            getLineColor: isB ? [251, 191, 36, 255] : [56, 189, 248, 255], // 随点阵变色
+            lineWidthMinPixels: 4,
+            stroked: true,
+            filled: false,
+            getRadius: radarSweepRadius,
+            pickable: false,
+            updateTriggers: {
+                getRadius: radarSweepRadius
+            }
+        });
+    }, [radarSweepActive, radarSweepRadius, sandboxCenters]);
+
     // ==================== 最终组装 ====================
 
     const layers = [
         ...staticLayers,
         activeTailLayer,
         hoverPathLayer,
+        roiRadiusLayer,
+        radarSweepLayer,
+        roiCenterModelLayer,
         quantizedZoom >= 13 ? uavModelLayer.clone({
             data: { length: activeUAVCount },
             updateTriggers: {
@@ -314,7 +395,7 @@ export function useMapLayers({
                 const index = binarySearchTimestamp(times, t);
                 if (index <= 0) return d.path[0];
                 if (index >= times.length) return d.path[d.path.length - 1];
-                
+
                 const t0 = times[index - 1];
                 const t1 = times[index];
                 const p0 = d.path[index - 1];

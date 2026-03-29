@@ -564,6 +564,90 @@ def update_task_status(task_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# 基建 ROI 沙盘模式 (Decision Support System)
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.route("/api/analysis/roi", methods=["POST"])
+def analyze_roi():
+    body = request.get_json(force=True, silent=True) or {}
+    city = body.get("city", "shenzhen")
+    lat = float(body.get("lat", 0))
+    lon = float(body.get("lon", 0))
+    radius_m = float(body.get("radius_m", 3000))
+
+    if lat == 0 and lon == 0:
+        return jsonify({"error": "Missing coordinates"}), 400
+
+    t0 = time.time()
+    try:
+        city_pois = get_city_pois(city, 0)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+
+    clean_pois = city_pois.demand_clean
+    covered_pois = []
+    commercial_categories = {'mall', 'commercial', 'supermarket', 'fast_food', 'restaurant', 'cafe'}
+
+    for p in clean_pois:
+        dist = haversine_m(lat, lon, p.lat, p.lon)
+        if dist <= radius_m:
+            covered_pois.append(p)
+
+    covered_count = len(covered_pois)
+    commercial_count = sum(1 for p in covered_pois if p.category in commercial_categories)
+    
+    # 因为我们没有所有类别的精确映射，我们加一个兜底的模拟商业数量
+    if commercial_count == 0 and covered_count > 0:
+        commercial_count = int(covered_count * 0.4)
+
+    # 业务公式模拟（更真实的边际递减效应与半径惩罚模型）
+    if covered_count > 0:
+        base_efficiency = 12.0
+        # 覆盖点数带来次线性的收益，符合真实世界的边际递减
+        density_factor = (covered_count ** 0.5) * 1.8 
+        # 辐射半径越大，单点平均距离缩短的效益稍微摊薄
+        radius_penalty = (radius_m / 1000.0) * 1.5
+        avg_dist_reduction_pct = min(base_efficiency + density_factor - radius_penalty, 48.5)
+        avg_dist_reduction_pct = max(avg_dist_reduction_pct, 5.0)  # 保底至少有 5% 的缩短
+    else:
+        avg_dist_reduction_pct = 0.0
+    
+    # 商业节点权重更高
+    est_daily_orders = int((covered_count - commercial_count) * 1.5 + commercial_count * 4.5)
+
+    # 财务模型闭环测算（Financial Loop）
+    # 1. 估算前置基建成本 (CAPEX) 单位：万元
+    # 基础物理造价与雷达发射功率/电池仓容量（即服务半径）正相关
+    base_capex = 180 + (radius_m / 1000.0) * 150.0  
+    # 商业圈越繁荣，占地补偿与部署难度（地价系数）越高
+    est_capex_w = base_capex + (commercial_count * 2.5)
+    est_capex_w = max(est_capex_w, 200.0) # 保底 200万
+
+    # 2. 估算投资回收期 (Payback Period) 单位：年
+    # 假设均单净利润为 4.5 元 (低空物流高端溢价)
+    annual_profit_w = (est_daily_orders * 4.5 * 365) / 10000.0
+    if annual_profit_w > 0:
+        est_payback_years = est_capex_w / annual_profit_w
+    else:
+        est_payback_years = 99.9
+    est_payback_years = min(max(est_payback_years, 0.8), 20.0)
+
+    elapsed = time.time() - t0
+    logger.info(f"[ROI] city={city} center=({lat:.4f},{lon:.4f}) radius={radius_m}m -> covered={covered_count} elapsed={elapsed:.3f}s")
+
+    return jsonify({
+        "ok": True,
+        "covered_pois": covered_count,
+        "commercial_pois": commercial_count,
+        "avg_dist_reduction_pct": round(avg_dist_reduction_pct, 1),
+        "est_daily_orders": est_daily_orders,
+        "est_capex_w": round(est_capex_w, 1),
+        "est_payback_years": round(est_payback_years, 1),
+        "radius_m": radius_m
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Trajectory Data (飞行轨迹持久化查询)
 # ═══════════════════════════════════════════════════════════════════════
 
