@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
+import { useSSESubscription } from '../hooks/useSSESubscription';
+import { CITY_LABEL_MAP } from '../constants/map';
 import { RefreshCw, Play, CheckCircle2, XCircle, Activity, LayoutList, ChevronLeft, ChevronRight, Navigation, Search } from 'lucide-react';
 
 interface Task {
@@ -25,14 +27,7 @@ interface TaskManagementPanelProps {
     onFocusFlight?: (flight: any) => void; 
 }
 
-const CITY_LABEL_MAP: Record<string, string> = {
-    shenzhen: '深圳',
-    beijing: '北京',
-    shanghai: '上海',
-    guangzhou: '广州',
-    chengdu: '成都',
-    chongqing: '重庆',
-};
+
 
 export default function TaskManagementPanel({
     isVisible,
@@ -80,30 +75,10 @@ export default function TaskManagementPanel({
         
         // 初始挂载时拉取全量数据
         fetchTasks();
-        
-        // ⚡️ SSE (Server-Sent Events) 长连接推送
-        const token = localStorage.getItem('token') || '';
-        const eventSource = new EventSource(`/api/tasks/stream?token=${token}`);
-
-        eventSource.onopen = () => {
-             console.log('[SSE] Task Stream Connected.');
-        };
-
-        eventSource.onmessage = (e) => {
-            if (e.data === 'update') {
-                // 接收到后端的更新推送，0延迟触发状态刷新
-                fetchTasks();
-            }
-        };
-
-        eventSource.onerror = (e) => {
-            console.warn('[SSE] Connection Error or Dropped.', e);
-        };
-
-        return () => {
-            eventSource.close(); // 清理长连接资源
-        };
     }, [isVisible]);
+
+    // 【架构优化 P1-2】使用全局单例 SSE 连接，不再独立创建 EventSource
+    useSSESubscription(fetchTasks, isVisible);
 
     // Apply Search Filter First, using debounced value
     const filteredTrajectories = useMemo(() => {
@@ -433,12 +408,7 @@ export default function TaskManagementPanel({
                 </div>
             </div>
             
-            <style dangerouslySetInnerHTML={{__html: `
-                .soft-scrollbar::-webkit-scrollbar { width: 8px; }
-                .soft-scrollbar::-webkit-scrollbar-track { background: rgba(248, 250, 252, 0.5); }
-                .soft-scrollbar::-webkit-scrollbar-thumb { background: rgba(203, 213, 225, 0.8); border-radius: 6px; }
-                .soft-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.9); }
-            `}} />
+
         </div>
     );
 }

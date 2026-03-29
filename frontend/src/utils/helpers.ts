@@ -20,22 +20,6 @@ export function formatTime(ms: number): string {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-/**
- * 格式化秒数为可读字符串
- * @param seconds - 秒数
- * @returns 格式化后的时间字符串 (HH:MM:SS)
- */
-export function formatSeconds(seconds: number): string {
-    if (seconds < 0 || !isFinite(seconds)) {
-        return '00:00:00';
-    }
-
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
 
 /**
  * 将数据转换为 CSV 格式字符串
@@ -230,15 +214,6 @@ export function generateId(prefix: string = 'id'): string {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-/**
- * 深拷贝对象
- * 使用浏览器原生 structuredClone，正确处理 Date/Map/Set/循环引用等
- * @param obj - 要拷贝的对象
- * @returns 深拷贝后的对象
- */
-export function deepClone<T>(obj: T): T {
-    return structuredClone(obj);
-}
 
 /**
  * 检查是否为客户端环境

@@ -5,6 +5,7 @@ server.py — 飞行轨迹算法 Flask API 服务
   python trajectory_lab/scripts/server.py
 """
 import sys
+import os
 import json
 import random
 import logging
@@ -42,7 +43,8 @@ logging.basicConfig(
 logger = logging.getLogger("TrajServer")
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'AetherWeave-SuperSecretKey-2026'
+# 【安全加固 SEC-1】密钥优先从环境变量读取，避免硬编码泄露
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'AetherWeave-SuperSecretKey-2026')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///aetherweave.db' # 默认开发环境使用 SQLite
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -580,22 +582,20 @@ def get_trajectories():
                 return jsonify(json.load(f))
         return jsonify({"error": f"No trajectory data found for {city}"}), 404
 
-    # 计算平均飞行时长和 cycleDuration（与 build_output 算法一致）
+    # 【性能优化 P0-6】合并为单次遍历，避免对每条记录做两次 json.loads()
+    trajectories = []
     total_dur = 0.0
     valid_count = 0
-    for log in logs:
-        ts = json.loads(log.timestamps_data)
-        if len(ts) >= 2:
-            total_dur += ts[-1] - ts[0]
-            valid_count += 1
-    avg_dur = total_dur / valid_count if valid_count > 0 else 0.0
-    cycle_duration = max((valid_count * avg_dur) / 500, avg_dur * 1.5) if valid_count > 0 else 3600.0
 
-    # 重建前端期望的 JSON 格式
-    trajectories = []
     for log in logs:
-        path = json.loads(log.path_data)
         timestamps = json.loads(log.timestamps_data)
+        path = json.loads(log.path_data)
+
+        # 计算 cycleDuration（原来在第一次循环中做的）
+        if len(timestamps) >= 2:
+            total_dur += timestamps[-1] - timestamps[0]
+            valid_count += 1
+
         traj = {
             "id": log.flight_id,
             "path": path,
@@ -604,15 +604,22 @@ def get_trajectories():
         }
         trajectories.append(traj)
 
-        # 动态补充 ghost 镜像实现无缝循环（不从数据库读，实时计算）
+    avg_dur = total_dur / valid_count if valid_count > 0 else 0.0
+    cycle_duration = max((valid_count * avg_dur) / 500, avg_dur * 1.5) if valid_count > 0 else 3600.0
+
+    # 动态补充 ghost 镜像实现无缝循环（不从数据库读，实时计算）
+    ghost_trajs = []
+    for traj in trajectories:
+        timestamps = traj["timestamps"]
         if timestamps and timestamps[-1] > cycle_duration:
             ghost_ts = [round(t - cycle_duration, 3) for t in timestamps]
-            trajectories.append({
-                "id": f"{log.flight_id}_ghost",
-                "path": path,
+            ghost_trajs.append({
+                "id": f"{traj['id']}_ghost",
+                "path": traj["path"],
                 "timestamps": ghost_ts,
-                "start_offset": round((log.start_offset or 0.0) - cycle_duration, 3),
+                "start_offset": round((traj["start_offset"]) - cycle_duration, 3),
             })
+    trajectories.extend(ghost_trajs)
 
     all_max_ts = max(
         (t["timestamps"][-1] for t in trajectories if t["timestamps"]),

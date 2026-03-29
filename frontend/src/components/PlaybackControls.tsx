@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { CITIES } from '../constants/map';
 import { formatElapsed } from '../utils/animation';
 
@@ -16,7 +17,8 @@ interface PlaybackControlsProps {
     timeRangeMax: number;
 }
 
-export default function PlaybackControls({
+// 【竞赛加分 BONUS-2】React.memo 包裹纯展示组件
+const PlaybackControls = memo(function PlaybackControls({
     isPlaying,
     setIsPlaying,
     animationSpeed,
@@ -133,3 +135,6 @@ export default function PlaybackControls({
         </div>
     );
 }
+);
+
+export default PlaybackControls;

@@ -34,6 +34,7 @@ class TrajectoryResult:
     duration_s: float
     algo: str = "astar_v4"
     nfz_violations: int = 0
+    nodes_expanded: int = 0  # 【竞赛加分 BONUS-5】A* 搜索扩展的节点数，答辩时可展示算法执行统计
 
 def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
@@ -45,8 +46,8 @@ def _altitude_profile(n: int, dist_m: float, flight_id: str = "") -> list[float]
     
     target_alt = CRUISE_ALT_M
     if flight_id:
-        import hashlib
-        hash_val = int(hashlib.md5(flight_id.encode('utf-8')).hexdigest(), 16)
+        # 【性能优化 P1-6】用内置 hash() 替代 hashlib.md5，消除函数内 import 和加密开销
+        hash_val = hash(flight_id) & 0xFFFFFFFF  # 确保正数
         target_alt = 80.0 + (hash_val % 41)
         
     alts = []
@@ -60,6 +61,7 @@ def _altitude_profile(n: int, dist_m: float, flight_id: str = "") -> list[float]
     return alts[:n]
 
 def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
+    """A* 寻路，返回 (路径, 扩展节点数) 元组"""
     GRID_DEG = 0.0005  
     
     start_x = int(round(a_lon / GRID_DEG))
@@ -68,7 +70,7 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
     goal_y = int(round(b_lat / GRID_DEG))
     
     if start_x == goal_x and start_y == goal_y:
-        return [(a_lat, a_lon), (b_lat, b_lon)]
+        return [(a_lat, a_lon), (b_lat, b_lon)], 0
         
     def heuristic(x, y):
         return math.hypot(x - goal_x, y - goal_y)
@@ -148,7 +150,7 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
                 came_from[nxt] = current
                 
     if 'GOAL' not in came_from:
-        return [(a_lat, a_lon), (b_lat, b_lon)] # 寻路失败Fallback
+        return [(a_lat, a_lon), (b_lat, b_lon)], expanded  # 寻路失败Fallback
         
     path_nodes = ['GOAL']
     curr = 'GOAL'
@@ -166,7 +168,7 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
         else:
             latlon_path.append((node[1] * GRID_DEG, node[0] * GRID_DEG))
             
-    return latlon_path
+    return latlon_path, expanded
 
 def _smooth_path(path_latlon, nfz_index, buffer_m=10.0):
     if not path_latlon or len(path_latlon) <= 2:
@@ -202,8 +204,9 @@ def plan(
     
     # 检测直飞是否会碰撞 (安全距离增加一些余量防止贴边)
     safe_buffer_m = 10.0 
+    nodes_expanded = 0
     if nfz_index and nfz_index.segment_intersects_any(a_lat, a_lon, b_lat, b_lon, safe_buffer_m):
-        grid_path = _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, safe_buffer_m)
+        grid_path, nodes_expanded = _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, safe_buffer_m)
         if len(grid_path) > 2:
             waypoints = _smooth_path(grid_path, nfz_index, safe_buffer_m)
 
@@ -264,4 +267,5 @@ def plan(
         duration_s=duration_s,
         nfz_violations=violations,
         algo="astar_v4",
+        nodes_expanded=nodes_expanded,
     )

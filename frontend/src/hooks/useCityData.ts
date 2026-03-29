@@ -44,16 +44,29 @@ const DEFAULT_STEPS: StepItem[] = [
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
-const MAX_CONCURRENT = 10; // 极大提升并发数，发挥 HTTP/2 多路复用性能
 
 /**
- * 数据任务返回类型
+ * 【底层性能优化 OPT-1】预编译阶段：将 AoS 数组打平为连续内存的 SoA (Structure of Arrays)
  */
-interface DataTaskResult {
-    type: 'buildings' | 'poi_demand' | 'poi_sensitive' | 'trajectories' | 'energy';
-    data: any;
-    error?: unknown;
+function precompileTrajectories(trajectories: UAVPath[]) {
+    for (const traj of trajectories) {
+        if (!traj.path || !traj.timestamps) continue;
+        const len = traj.path.length;
+        if (!traj.pathLon || traj.pathLon.length !== len) {
+            traj.pathLon = new Float32Array(len);
+            traj.pathLat = new Float32Array(len);
+            traj.pathAlt = new Float32Array(len);
+            traj.timestampsF64 = new Float64Array(len);
+            for (let i = 0; i < len; i++) {
+                traj.pathLon[i] = traj.path[i][0];
+                traj.pathLat[i] = traj.path[i][1];
+                traj.pathAlt[i] = traj.path[i][2];
+                traj.timestampsF64[i] = traj.timestamps[i];
+            }
+        }
+    }
 }
+
 
 /**
  * 更新步骤状态
@@ -72,36 +85,10 @@ const updateStepStatus = (
 };
 
 /**
- * 并发控制函数
- * @param tasks - 任务列表
- * @param maxConcurrent - 最大并发数
- * @returns 所有任务的结果
+ * 【性能优化 P1-4】删除了 runWithConcurrency 并发控制函数
+ * 原因：仅 5 个任务 vs MAX_CONCURRENT=10，永远不会触发并发限制
+ * 改用原生 Promise.allSettled，减少 ~30 行自定义调度代码
  */
-async function runWithConcurrency(
-    tasks: Array<() => Promise<DataTaskResult>>,
-    maxConcurrent: number
-): Promise<DataTaskResult[]> {
-    const results: DataTaskResult[] = new Array(tasks.length);
-    const executing: Set<Promise<void>> = new Set();
-
-    for (let i = 0; i < tasks.length; i++) {
-        const task = tasks[i];
-        const promise = (async () => {
-            const result = await task();
-            results[i] = result;
-        })();
-
-        executing.add(promise);
-        promise.then(() => executing.delete(promise));
-
-        if (executing.size >= maxConcurrent) {
-            await Promise.race(executing);
-        }
-    }
-
-    await Promise.all(executing);
-    return results;
-}
 
 /**
  * 城市数据加载 Hook
@@ -296,27 +283,31 @@ export function useCityData(): UseCityDataReturn {
                 }
             ];
 
-            // 使用并发控制并行加载所有数据
-            const results = await runWithConcurrency(dataTasks, MAX_CONCURRENT);
+            // 【性能优化 P1-4】使用原生 Promise.allSettled 并行加载所有数据
+            const settled = await Promise.allSettled(dataTasks.map(t => t()));
 
             if (signal.aborted) return;
 
             // 检查是否有错误
-            const errors = results.filter(r => 'error' in r && r.error);
+            const results = settled.map((s: PromiseSettledResult<any>) => 
+                s.status === 'fulfilled' ? s.value : { type: 'unknown', data: null, error: s.reason }
+            );
+            const errors = results.filter((r: any) => 'error' in r && r.error);
             if (errors.length > 0) {
-                const firstError = errors[0];
-                throw firstError.error;
+                throw errors[0].error;
             }
 
             // 提取数据
-            const buildings = results.find(r => r.type === 'buildings')?.data;
-            const poiDemandData = results.find(r => r.type === 'poi_demand')?.data;
-            const poiSensitiveData = results.find(r => r.type === 'poi_sensitive')?.data;
-            const trajectoriesData = results.find(r => r.type === 'trajectories')?.data;
-            const energyDataResult = results.find(r => r.type === 'energy')?.data;
+            const buildings = results.find((r: any) => r.type === 'buildings')?.data;
+            const poiDemandData = results.find((r: any) => r.type === 'poi_demand')?.data;
+            const poiSensitiveData = results.find((r: any) => r.type === 'poi_sensitive')?.data;
+            const trajectoriesData = results.find((r: any) => r.type === 'trajectories')?.data;
+            const energyDataResult = results.find((r: any) => r.type === 'energy')?.data;
 
             const cityTrajectories = trajectoriesData?.trajectories || [];
             const cityTimeRange = trajectoriesData?.timeRange || { min: 0, max: 0 };
+
+            precompileTrajectories(cityTrajectories);
 
             const cityData: CityData = {
                 buildings,
@@ -371,6 +362,7 @@ export function useCityData(): UseCityDataReturn {
                 .then(r => r.ok ? r.json() : null).catch(() => null);
             if (tRes) {
                 const newTrajs = tRes.trajectories || [];
+                precompileTrajectories(newTrajs);
                 setTrajectories(newTrajs);
                 timeRangeRef.current = tRes.timeRange || { min: 0, max: 0 };
                 // 移除 currentTimeRef.current = 0，从而不再打断其他处于飞行中状态的无人机！

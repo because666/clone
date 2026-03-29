@@ -1,10 +1,12 @@
+import { memo } from 'react';
 import { DEMAND_TYPE_MAP } from '../constants/map';
 
 interface HoverInfoProps {
     hoverInfo: any;
 }
 
-export default function HoverTooltip({ hoverInfo }: HoverInfoProps) {
+// 【竞赛加分 BONUS-2】React.memo 包裹纯展示组件，避免父组件重渲染时的不必要重建
+const HoverTooltip = memo(function HoverTooltip({ hoverInfo }: HoverInfoProps) {
     if (!hoverInfo || !hoverInfo.object || !hoverInfo.object.properties) return null;
 
     const props = hoverInfo.object.properties;
@@ -37,3 +39,6 @@ export default function HoverTooltip({ hoverInfo }: HoverInfoProps) {
         </div>
     );
 }
+);
+
+export default HoverTooltip;
