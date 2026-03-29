@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { RefreshCw, Play, CheckCircle2, XCircle, Activity, LayoutList, ChevronLeft, ChevronRight, Navigation, Search } from 'lucide-react';
