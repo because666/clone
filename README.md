@@ -34,7 +34,7 @@
 
 <div align="center">
   <!-- 核心大屏调度全景 -->
-  <video src="https://github.com/在这里填入_你刚刚生成的_demo_main_的_mp4_链接.mp4" autoplay loop muted playsinline style="width: 100%;"></video>
+  <video src="https://github.com/user-attachments/assets/e57a241b-572e-4588-a407-b7da5a08baae" autoplay loop muted playsinline style="width: 100%;"></video>
 </div>
 
 <br>
@@ -44,7 +44,7 @@
     <tr>
       <!-- 模块 1：高潮追踪录屏 -->
       <td align="center">
-        <video src="https://github.com/在这里填入_追踪片段_的_mp4_链接.mp4" autoplay loop muted playsinline style="width: 100%;"></video><br/>
+        <video src="https://github.com/user-attachments/assets/20f0dbe0-786d-4130-bfa8-233cb6e646d7" autoplay loop muted playsinline style="width: 100%;"></video><br/>
         <b>👆 镜头绑定与单机深度追踪</b><br/>
         <sub>锁定高危隐患航班，同步呈现三维历史航线与到点预估时间</sub>
       </td>
