@@ -129,57 +129,55 @@ flowchart TD
 
 ### 2. 部署运行
 
-**步骤 一：点燃后端中枢**
+**步骤一：启动后端服务**
 ```bash
 git clone https://github.com/TengJiao33/AetherWeave.git
 cd AetherWeave
 
-# 我们建议您隔离使用环境：
+# 推荐使用虚拟环境：
 python -m venv venv
 # 激活环境 (Windows 用户运行: .\venv\Scripts\activate)
 source venv/bin/activate
 
 cd backend
-# 挂载依赖并启动
+# 安装依赖并启动
 pip install -r requirements.txt
 python main.py  
-# 此时，实时推送核心已驻守于 [http://localhost:8000]
+# 后端服务已运行在 http://localhost:8000
 ```
 
-**步骤 二：唤醒视觉网关**
+**步骤二：启动前端大屏面板**
 ```bash
 # 请开启全新的终端
 cd frontend
 npm install
 npm run dev     
-# 登舰！请访问 [http://localhost:3000] 享受您的 3D 物流世界
+# 访问 http://localhost:3000 查看 3D 面板
 ```
 
 ## 📚 目录结构导览
 
 ```text
 AetherWeave/
-├── frontend/             # ✨ 浏览器 3D 可视化端 (React + Typescript)
+├── frontend/             # 浏览器 3D 可视化端 (React + Typescript)
 │   ├── src/
-│   │   ├── components/   # 高维抽象的 UI 与 Deck.gl 底层图层组件
-│   │   ├── hooks/        # 管控数据流向与动画播放状态的核心 Hooks
-│   │   └── utils/        # 面向二进制性能优化的 ArrayBuffer 算子
-│   └── public/           # 静态纹理及回放模型数据
-├── backend/              # ⚙️ 强实时调度引擎 (Python + FastAPI)
-│   ├── core/             # 4D 动态航线、禁飞区计算与碰撞检测算法
-│   └── api/              # 高性能 SSE 推送路由与管理面 API
-├── trajectory_lab/       # 🔬 算法实验室 (环境模拟验证脚本、批量产生器)
-└── docs/                 # 📖 协议定案、架构决策（ADR）与深度解析
+│   │   ├── components/   # UI 与 Deck.gl 图层组件
+│   │   ├── hooks/        # 数据流向与状态管理
+│   │   └── utils/        # ArrayBuffer 性能优化模块
+│   └── public/           # 静态纹理及数据存放
+├── backend/              # 实时调度引擎 (Python + FastAPI)
+│   ├── core/             # A* 空域避障及调度引擎计算
+│   └── api/              # SSE 推送路由与 HTTP API
+├── trajectory_lab/       # 算法脚本实验室 (用于生成和验证航线数据)
+└── docs/                 # 技术文档与架构说明
 ```
 
 
 
 ## 团队成员
 
-> 💡 **占位提示**: 这里请写入各位团队成员的名字、主要负责模块、指导老师姓名以及已获奖项。
-- **项目指导**：[杨正益]
-- **核心开发组**：
-  - [应飞扬][邓博][谢丽欣][罗楚瑞]
+- **指导老师**：杨正益
+- **核心开发组**：应飞扬、邓博、谢丽欣、罗楚瑞
 
 ## 📜 开源与法律声明
 
@@ -188,6 +186,5 @@ AetherWeave/
 
 ---
 <div align="center">
-  <sub>在星云般的数据流中，我们重塑城市低空的秩序。</sub><br/>
-  <sup>Built with passion in 2026.</sup>
+  <sup>© 2026 AetherWeave Team. MIT Licensed.</sup>
 </div>
