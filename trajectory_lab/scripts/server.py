@@ -43,7 +43,8 @@ logger = logging.getLogger("TrajServer")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'AetherWeave-SuperSecretKey-2026'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///aetherweave.db' # 默认开发环境使用 SQLite
+# 使用绝对路径确保数据库文件在 /app 目录下，避免权限问题
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////app/aetherweave.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 CORS(app)  # 允许前端跨域访问
