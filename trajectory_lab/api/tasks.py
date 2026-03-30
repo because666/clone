@@ -130,7 +130,7 @@ def list_tasks():
             "updated_at": t.updated_at.isoformat()
         })
 
-    return jsonify({"ok": True, "tasks": result})
+    return jsonify({"code": 0, "data": {"tasks": result}, "message": "success"})
 
 
 @tasks_bp.route("/tasks/stream", methods=["GET"])
@@ -180,4 +180,4 @@ def update_task_status(task_id):
 
     log_audit("UPDATE_TASK_STATUS", resource="tasks", details={"task_id": task.id, "new_status": new_status})
 
-    return jsonify({"ok": True, "task_id": task.id, "status": task.status})
+    return jsonify({"code": 0, "data": {"task_id": task.id, "status": task.status}, "message": "success"})

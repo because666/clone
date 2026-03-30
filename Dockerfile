@@ -1,4 +1,4 @@
-# 多阶段构建 Dockerfile for Zeabur 部署
+# 多阶段构建 Dockerfile for 生产部署
 # 同时包含前端构建和后端服务
 
 # ==================== 阶段 1: 构建前端 ====================
@@ -31,12 +31,15 @@ COPY data/ ./data/
 
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-COPY zeabur-start.sh ./start.sh
-RUN chmod +x ./start.sh
-
 EXPOSE 8080
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 ENV PORT=8080
 
-CMD ["./start.sh"]
+# 直接使用 python 启动，不再依赖缺失的 shell 脚本
+CMD ["python", "-m", "trajectory_lab.scripts.server", "--host", "0.0.0.0", "--port", "8080"]
+
+# 健康检查，配合 /api/health 端点
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:8080/api/health || exit 1

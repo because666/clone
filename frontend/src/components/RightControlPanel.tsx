@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, memo, type ReactNode } from 'react';
 import { 
   Activity, ShieldAlert, Zap, Wind, Sun, Cloud, CloudRain, 
   CloudSnow, CloudLightning, BatteryWarning
@@ -14,8 +14,8 @@ const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] =
     { type: 'snowy', icon: <CloudSnow size={14} />, label: '降雪' },
     { type: 'hailing', icon: <CloudLightning size={14} />, label: '冰雹' },
 ];
-
-export default function RightControlPanel() {
+// 【性能优化 P1-D】memo 包裹，避免 DashboardOverlay 父组件 re-render 时无条件重建
+const RightControlPanel = memo(function RightControlPanel() {
     const { windSpeed, setWindSpeed, weather, setWeather, temperature, setTemperature } = useEnvironment();
     const { alerts, totalCounts } = useAlerts();
     const [isCollapsed, setIsCollapsed] = useState(true);
@@ -186,4 +186,6 @@ export default function RightControlPanel() {
             </div>
         </div>
     );
-}
+});
+
+export default RightControlPanel;

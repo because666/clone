@@ -48,7 +48,7 @@ const BASE_DELAY = 1000;
 /**
  * 【底层性能优化 OPT-1】预编译阶段：将 AoS 数组打平为连续内存的 SoA (Structure of Arrays)
  */
-function precompileTrajectories(trajectories: UAVPath[]) {
+export function precompileTrajectories(trajectories: UAVPath[]) {
     for (const traj of trajectories) {
         if (!traj.path || !traj.timestamps) continue;
         const len = traj.path.length;

@@ -10,7 +10,8 @@
  * - 地图点击处理
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { analyzeRoi } from '../services/api';
 
 interface SandboxCenter {
     lat: number;
@@ -41,6 +42,13 @@ export function useSandbox({ currentCity }: UseSandboxParams) {
     // 雷达扫描波状态
     const [radarSweepActive, setRadarSweepActive] = useState(false);
     const [radarSweepRadius, setRadarSweepRadius] = useState(0);
+    /**
+     * 【性能优化 P2-D】雷达扫描波 ref 驱动中间帧。
+     * 仅在动画首帧和末帧调用 setState；中间帧直接修改 ref 值，
+     * 再通过 Deck.gl 的 updateTriggers 让图层感知变化（由主动画循环 cloneLayers 触发）。
+     * 从而将 ~45 帧的 React re-render 降为 2 帧。
+     */
+    const radarSweepRadiusRef = useRef(0);
 
     // ROI API 调用状态
     const [roiLoading, setRoiLoading] = useState(false);
@@ -55,15 +63,18 @@ export function useSandbox({ currentCity }: UseSandboxParams) {
     const triggerRadarSweep = useCallback((targetRadius: number) => {
         setRadarSweepActive(true);
         setRadarSweepRadius(0);
+        radarSweepRadiusRef.current = 0;
         let currR = 0;
         const step = targetRadius / 45;
         const runSweep = () => {
             currR += step * (1 + (currR / targetRadius) * 2);
             if (currR >= targetRadius) {
+                radarSweepRadiusRef.current = targetRadius;
                 setRadarSweepRadius(targetRadius);
                 setTimeout(() => setRadarSweepActive(false), 300);
             } else {
-                setRadarSweepRadius(currR);
+                // 【P2-D】中间帧仅更新 ref，不调用 setState
+                radarSweepRadiusRef.current = currR;
                 requestAnimationFrame(runSweep);
             }
         };
@@ -83,35 +94,20 @@ export function useSandbox({ currentCity }: UseSandboxParams) {
 
         triggerRadarSweep(sandboxRadius);
 
-        // 调用 ROI API
+        // 【工程化改进 S1】使用统一 API service 层
         setRoiLoading(true);
         setRoiError(null);
 
-        const token = localStorage.getItem('token');
-        fetch('/api/analysis/roi', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': token ? `Bearer ${token}` : ''
-            },
-            body: JSON.stringify({
-                city: currentCity,
-                lat, lon,
-                radius_m: sandboxRadius
-            }),
-        })
-            .then(res => res.json())
-            .then(data => {
-                // 兼容新旧响应格式
-                const roiResult = data.data || data;
-                if (data.ok || data.code === 0) {
+        analyzeRoi({ city: currentCity, lat, lon, radius_m: sandboxRadius })
+            .then(resp => {
+                if (resp.ok) {
                     setRoiDatas(prev => {
-                        const next = sandboxCompareMode ? [...prev, roiResult] : [roiResult];
+                        const next = sandboxCompareMode ? [...prev, resp.data as RoiData] : [resp.data as RoiData];
                         if (next.length > 2) return next.slice(next.length - 2);
                         return next;
                     });
                 } else {
-                    setRoiError(data.error || data.message || '分析失败');
+                    setRoiError(resp.message || '分析失败');
                 }
             })
             .catch(e => setRoiError(`请求失败: ${e.message}`))
@@ -124,26 +120,15 @@ export function useSandbox({ currentCity }: UseSandboxParams) {
         if (sandboxCenters.length > 0) {
             setRoiLoading(true);
             setRoiError(null);
-            const token = localStorage.getItem('token');
 
+            // 【工程化改进 S1】统一 API service 层
             Promise.all(sandboxCenters.map(center =>
-                fetch('/api/analysis/roi', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    },
-                    body: JSON.stringify({
-                        city: currentCity,
-                        lat: center.lat, lon: center.lon,
-                        radius_m: newRadius
-                    }),
-                }).then(res => res.json())
+                analyzeRoi({ city: currentCity, lat: center.lat, lon: center.lon, radius_m: newRadius })
             ))
                 .then(results => {
                     const newDatas = results
-                        .map(r => (r.ok || r.code === 0) ? (r.data || r) : null)
-                        .filter(Boolean);
+                        .filter(r => r.ok)
+                        .map(r => r.data as RoiData);
                     setRoiDatas(newDatas);
                     if (newDatas.length < results.length) {
                         setRoiError('部分分析失败');

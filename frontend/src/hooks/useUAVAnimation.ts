@@ -42,7 +42,26 @@ function fastDistSq(lon1: number, lat1: number, lon2: number, lat2: number): num
 /**
  * 【性能优化 P0-1】图层克隆统一逻辑
  * 提取为纯函数，消除 animate() 和 handleProgressClick() 中完全相同的 30 行重复代码
+ * 【性能优化 P2-C】用 Map 哈希查找替代 if-else 字符串比较链，消除热路径中的逐字符比较
  */
+type LayerCloner = (layer: any, currentTime: number) => any;
+
+const LAYER_CLONERS = new Map<string, LayerCloner>([
+    ['uav-active-tail-layer', (layer, currentTime) => layer.clone({ currentTime })],
+    ['selected-uav-layer', (layer, currentTime) => layer.clone({ updateTriggers: { getPosition: currentTime } })],
+    ['uav-model-layer', (layer, currentTime) => layer.clone({
+        data: { length: activeUAVCount },
+        updateTriggers: { getPosition: currentTime, getOrientation: currentTime }
+    })],
+    ['uav-point-layer', (layer, currentTime) => layer.clone({
+        data: {
+            length: activeUAVCount,
+            attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
+        },
+        updateTriggers: { getPosition: currentTime }
+    })],
+]);
+
 function cloneLayers(deck: any, currentTime: number): any[] {
     const currentLayers = deck.props.layers || [];
     const len = currentLayers.length;
@@ -50,27 +69,8 @@ function cloneLayers(deck: any, currentTime: number): any[] {
     for (let li = 0; li < len; li++) {
         const layer = currentLayers[li];
         if (!layer) { updatedLayers[li] = layer; continue; }
-        const lid = layer.id;
-        if (lid === 'uav-active-tail-layer') {
-            updatedLayers[li] = layer.clone({ currentTime });
-        } else if (lid === 'selected-uav-layer') {
-            updatedLayers[li] = layer.clone({ updateTriggers: { getPosition: currentTime } });
-        } else if (lid === 'uav-model-layer') {
-            updatedLayers[li] = layer.clone({
-                data: { length: activeUAVCount },
-                updateTriggers: { getPosition: currentTime, getOrientation: currentTime }
-            });
-        } else if (lid === 'uav-point-layer') {
-            updatedLayers[li] = layer.clone({
-                data: {
-                    length: activeUAVCount,
-                    attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
-                },
-                updateTriggers: { getPosition: currentTime }
-            });
-        } else {
-            updatedLayers[li] = layer; // 静态图层：零拷贝引用传递
-        }
+        const cloner = LAYER_CLONERS.get(layer.id);
+        updatedLayers[li] = cloner ? cloner(layer, currentTime) : layer; // 静态图层：零拷贝引用传递
     }
     return updatedLayers;
 }

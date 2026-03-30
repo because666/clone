@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
+import { precompileTrajectories } from '../hooks/useCityData';
+import { fetchTasks as fetchTasksApi } from '../services/api';
 import DeckGL from '@deck.gl/react';
 import { FlyToInterpolator } from '@deck.gl/core';
 import { Map as MapGL, type MapRef } from 'react-map-gl/maplibre';
@@ -6,6 +8,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { INITIAL_VIEW_STATE, CITY_COORDS } from '../constants/map';
 import { useCityData } from '../hooks/useCityData';
+import type { UAVPath } from '../types/map';
 import { useUAVAnimation } from '../hooks/useUAVAnimation';
 import { useSSESubscription } from '../hooks/useSSESubscription';
 import { useMapLayers } from '../hooks/useMapLayers';
@@ -72,15 +75,15 @@ export default function MapContainer() {
         currentCity, isSandboxMode, showToast
     });
 
-    const [hoverInfo, setHoverInfoState] = useState<any>(null);
+    const [hoverInfo, setHoverInfoState] = useState<Record<string, any> | null>(null);
     // ==========================================
     // 渲染闭环稳定性防护：悬停状态频率节流
     // 由于 Deck.gl 的 onHover 每移动 1px 就会触发，如果直接 setState 会导致 MapContainer
     // 这个庞然大物遭受毁灭性的重绘雪崩（DOM树震荡）。
     // 解法：利用 mutable ref 同步真实状态，只在“鼠标跨越到新无人机”的边界时刻，才调用 setState 突破防线。
     // ==========================================
-    const hoverInfoRef = useRef<any>(null);
-    const setHoverInfo = useCallback((info: any) => {
+    const hoverInfoRef = useRef<Record<string, any> | null>(null);
+    const setHoverInfo = useCallback((info: Record<string, any> | null) => {
         // 仅在 hover 目标对象变化时才触发 re-render（而非每次鼠标移动）
         const prevId = hoverInfoRef.current?.object?.properties?.name || hoverInfoRef.current?.object?.id;
         const newId = info?.object?.properties?.name || info?.object?.id;
@@ -96,8 +99,8 @@ export default function MapContainer() {
 
     const mapRef = useRef<MapRef>(null);
     const deckRef = useRef<any>(null);
-    // 【新增】用于脱离 React 生命周期的独立锁机跟拍状态
-    const trackingStateRef = useRef<{ isTracking: boolean, lockedFlight: any | null }>({ isTracking: false, lockedFlight: null });
+    // 【工程化改进 S2】消除 any，明确跟拍状态类型
+    const trackingStateRef = useRef<{ isTracking: boolean, lockedFlight: UAVPath | null }>({ isTracking: false, lockedFlight: null });
 
     const { windSpeed } = useEnvironment();
     const { pushAlert } = useAlerts();
@@ -107,9 +110,6 @@ export default function MapContainer() {
         setIsPlaying,
         animationSpeed,
         setAnimationSpeed,
-        progressBarRef,
-        progressTextRef,
-        handleProgressClick
     } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert, trackingStateRef);
 
     useEffect(() => {
@@ -119,31 +119,29 @@ export default function MapContainer() {
     // 基于 SSE 获取并注入执行中的实时任务轨迹
     const fetchActiveTasks = useCallback(async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('/api/tasks?status=EXECUTING', {
-                headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-            });
-            const data = await res.json();
-            if (data.ok && data.tasks) {
-                setTrajectories(prev => {
-                    const existingIds = new Set(prev.map((t: any) => t.id));
-                    const newTrajs = [];
-                    for (const task of data.tasks) {
-                        if (task.trajectory_data && task.trajectory_data.id) {
-                            if (!existingIds.has(task.trajectory_data.id)) {
-                                const newTraj = { ...task.trajectory_data };
-                                const offset = currentTimeRef.current;
-                                newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
-                                newTrajs.push(newTraj);
-                            }
+            // 【工程化改进 S1】统一 API 调用层，消除裸 fetch + 手动 token
+            const tasks = await fetchTasksApi('EXECUTING');
+            setTrajectories(prev => {
+                const existingIds = new Set(prev.map((t: any) => t.id));
+                const newTrajs = [];
+                for (const task of tasks) {
+                    if (task.trajectory_data && task.trajectory_data.id) {
+                        if (!existingIds.has(task.trajectory_data.id)) {
+                            const newTraj = { ...task.trajectory_data };
+                            const offset = currentTimeRef.current;
+                            newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
+                            newTrajs.push(newTraj);
                         }
                     }
-                    if (newTrajs.length > 0) {
-                        return [...prev, ...newTrajs];
-                    }
-                    return prev;
-                });
-            }
+                }
+                if (newTrajs.length > 0) {
+                    // 【性能优化 P2-B】对 SSE 注入的新轨迹执行 SoA 预编译，
+                    // 确保动画循环中走 Float32Array 快路径而非 AoS 慢路径
+                    precompileTrajectories(newTrajs);
+                    return [...prev, ...newTrajs];
+                }
+                return prev;
+            });
         } catch (err) {
             console.warn('[MapContainer] 活跃任务获取失败:', err);
         }
@@ -421,10 +419,6 @@ export default function MapContainer() {
                     handleCityJump={handleCityJump}
                     isDropdownOpen={isDropdownOpen}
                     setIsDropdownOpen={setIsDropdownOpen}
-                    progressBarRef={progressBarRef}
-                    progressTextRef={progressTextRef}
-                    handleProgressClick={handleProgressClick}
-                    timeRangeMax={timeRangeRef.current.max}
                 />
 
                 <WeatherOverlay />

@@ -9,18 +9,14 @@
 前端：独立 `/analytics` 数据分析页（起降点热力图、告警统计趋势、跨城市对比）
 算法：多无人机 4D 航路冲突检测与可视化（时间+空间碰撞预判）
 后端：无人机档案注册管理接口 + 前端管理界面
-工程：完善 `.env.example` 多环境配置，补充 `/api/health` 标准健康检查端点
-工程：编写 `scripts/README.md` 数据 pipeline 文档，更新 Dockerfile 启动命令
-
-## In Progress
-[应飞扬] 前端：统一 API 调用层，收口裸 fetch 至 service 层，消灭 20+ 处散落 token 拼接
-[应飞扬] 前端：消灭 MapContainer 核心变量 any 类型，定义航班/轨迹/POI TypeScript 接口
-[应飞扬] 前端：全量迁移旧响应格式 `data.ok` → `data.code === 0`
 [应飞扬] 测试：pytest 覆盖后端 API + 前端 useSandbox/useFlightPicking Hook 测试
 
+## In Progress
+
 ##  Done
+[应飞扬] 工程：深度性能优化 12 项（Context 稳定化、粒子系统 ref 驱动、layers memo、SSE 轨迹预编译、组件 memo 化、内存泄漏修复、雷达动画优化、cloneLayers 哈希查找、Vite 构建优化）+ 工程化改进 7 项（统一 API Service 层、TypeScript 类型安全、后端响应格式统一、脚本文档、.env.example、Dockerfile 修复、/api/health 端点）
 [应飞扬] 工程：全栈架构重构——后端 Blueprint 模块化拆分（server.py 770→110行）、统一 API 响应格式 {code,data,message}、前端 Hook 提取（useSandbox/useFlightPicking）、Context 合并、死代码清理（~420行）
-[应飞扬] 全栈：研发基于空间计算的“基建 ROI 沙盘 DSS 辅助决策引擎”（含 A/B 方案博弈、投资财务闭环与 3D 雷达激波渲染）
+[应飞扬] 全栈：研发基于空间计算的"基建 ROI 沙盘 DSS 辅助决策引擎"（含 A/B 方案博弈、投资财务闭环与 3D 雷达激波渲染）
 [应飞扬] 前端：深度重构动画底层管线实现极度渲染降耗（引入 SoA 连续内存、O(1) 空间哈希剪裁、DOM 降频与无锁状态机）
 [应飞扬] 前端：全面模块化解耦 MapContainer 巨型组件，基于发布订阅模式接入 SSE 事件流重构实时通信架构
 [应飞扬] 前/后端：完成双轨制的航线审批及任务调度流（集成防抖检索引擎）

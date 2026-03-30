@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
@@ -25,10 +25,12 @@ export default defineConfig({
     },
   },
   esbuild: {
-    // 生产环境自动去除 console 和 debugger 减小体积
-    drop: ['console', 'debugger'],
+    // 【性能优化 P1-C】仅在生产环境去除 console/debugger，避免开发期丢失调试信息
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
   },
   build: {
+    // 【性能优化 P1-C】面向现代浏览器编译，利用原生语法减少 polyfill 体积
+    target: 'es2022',
     rollupOptions: {
       output: {
         // 核心：基于包特性的手动分包策略 (Manual Chunks)
@@ -53,4 +55,4 @@ export default defineConfig({
       }
     }
   }
-})
+}))

@@ -1,12 +1,20 @@
 import { useEffect, useRef, memo } from 'react';
 import { useEnvironment } from '../contexts/EnvironmentContext';
 
-// 【竞赛加分 BONUS-2】React.memo 包裹，仅受 weather/windSpeed 影响
+// 【竞赛加分 BONUS-2】React.memo 包裹，仅受 weather 影响
 const WeatherOverlay = memo(function WeatherOverlay() {
     const { weather, windSpeed } = useEnvironment();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     // 【Bug 修复】用 ref 存储 animationFrameId，避免清理时捕获闭包旧值导致残留动画
     const animFrameIdRef = useRef<number>(0);
+    /**
+     * 【性能优化 P0-D】将 windSpeed 存入 ref，动画帧内读取最新值。
+     * 仅 weather 变化时重建粒子系统，风速滑块拖动不再触发
+     * 整个 Canvas 粒子系统的销毁 → 重建。
+     */
+    const windSpeedRef = useRef(windSpeed);
+    windSpeedRef.current = windSpeed;
+
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -78,6 +86,9 @@ const WeatherOverlay = memo(function WeatherOverlay() {
                 return;
             }
 
+            // 【P0-D】从 ref 读取最新风速值，而非闭包捕获
+            const ws = windSpeedRef.current;
+
             ctx.clearRect(0, 0, w, h);
             
             if (weather === 'cloudy') {
@@ -103,7 +114,7 @@ const WeatherOverlay = memo(function WeatherOverlay() {
                     ctx.fill();
                     
                     // Move based on wind (double step to compensate for halved frame rate)
-                    p.x += (p.speed + windSpeed * 0.1) * 2;
+                    p.x += (p.speed + ws * 0.1) * 2;
                     if (p.x > w + p.r) {
                         p.x = -p.r;
                         p.y = Math.random() * h;
@@ -117,7 +128,7 @@ const WeatherOverlay = memo(function WeatherOverlay() {
                     const p = particles[i];
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y);
-                    const tilt = windSpeed * 3;
+                    const tilt = ws * 3;
                     ctx.lineTo(p.x + tilt, p.y + p.l * 1.5);
                     ctx.stroke();
                     p.y += p.v * 1.8 * 2;
@@ -132,7 +143,7 @@ const WeatherOverlay = memo(function WeatherOverlay() {
                     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
                     ctx.fill();
                     p.y += p.v * 0.4 * 2;
-                    p.x += (Math.sin(p.y / 50 + p.x) * 1.5 + (windSpeed * 0.3)) * 2;
+                    p.x += (Math.sin(p.y / 50 + p.x) * 1.5 + (ws * 0.3)) * 2;
                     if (p.y > h) { p.y = -p.r; p.x = Math.random() * w; }
                 }
             } else if (weather === 'hailing') {
@@ -143,7 +154,7 @@ const WeatherOverlay = memo(function WeatherOverlay() {
                     ctx.arc(p.x, p.y, p.r + 1.5, 0, Math.PI * 2);
                     ctx.fill();
                     p.y += p.v * 2 * 2;
-                    p.x += windSpeed * 0.5 * 2;
+                    p.x += ws * 0.5 * 2;
                     if (p.y > h) { p.y = -p.r; p.x = Math.random() * w; }
                 }
             }
@@ -165,7 +176,7 @@ const WeatherOverlay = memo(function WeatherOverlay() {
             if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
             window.removeEventListener('resize', handleResize);
         };
-    }, [weather, windSpeed]);
+    }, [weather]); // 【P0-D】移除 windSpeed 依赖，仅 weather 变化时重建
 
     return (
         <canvas 

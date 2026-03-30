@@ -14,6 +14,7 @@ server.py — AetherWeave 后端服务入口
   python trajectory_lab/scripts/server.py
 """
 import sys
+import time
 import logging
 import argparse
 from pathlib import Path
@@ -89,6 +90,31 @@ def create_app() -> Flask:
     app.register_blueprint(trajectories_bp)
     app.register_blueprint(tasks_bp)
     app.register_blueprint(analysis_bp)
+
+    # 【工程化改进 S8】标准化健康检查端点
+    _start_time = time.time()
+
+    @app.route("/api/health")
+    def health_check():
+        """标准化健康检查，配合 Docker HEALTHCHECK 和监控系统"""
+        try:
+            # 数据库连通性探测
+            db.session.execute(db.text("SELECT 1"))
+            db_status = "connected"
+        except Exception:
+            db_status = "disconnected"
+
+        return jsonify({
+            "code": 0,
+            "data": {
+                "status": "healthy" if db_status == "connected" else "degraded",
+                "version": "1.0.0",
+                "database": db_status,
+                "cached_cities": list(_POI_CACHE.keys()),
+                "uptime_seconds": round(time.time() - _start_time, 1),
+            },
+            "message": "ok"
+        })
 
     # ── 静态文件服务 (生产环境) ──
     @app.route("/")

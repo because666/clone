@@ -302,8 +302,8 @@ export function useMapLayers({
             data: sandboxCenters,
             getPosition: (d: any) => [d.lon, d.lat],
             // 站点A使用科技蓝，站点B使用琥珀金
-            getFillColor: (d: any, {index}: any) => index === 0 ? [59, 130, 246, 50] : [245, 158, 11, 50],
-            getLineColor: (d: any, {index}: any) => index === 0 ? [59, 130, 246, 200] : [245, 158, 11, 200],
+            getFillColor: (_d: any, {index}: any) => index === 0 ? [59, 130, 246, 50] : [245, 158, 11, 50],
+            getLineColor: (_d: any, {index}: any) => index === 0 ? [59, 130, 246, 200] : [245, 158, 11, 200],
             lineWidthMinPixels: 2,
             stroked: true,
             filled: true,
@@ -329,7 +329,7 @@ export function useMapLayers({
             sizeScale: 40.0,
             parameters: { depthTest: true, cull: false },
             // A 使用白底透蓝，B 使用高对比度的耀金
-            getColor: (d: any, {index}: any) => index === 0 ? [240, 248, 255, 255] : [255, 200, 100, 255],
+            getColor: (_d: any, {index}: any) => index === 0 ? [240, 248, 255, 255] : [255, 200, 100, 255],
             pickable: false,
             updateTriggers: {
                 getOrientation: [0, 0, 90],
@@ -365,65 +365,70 @@ export function useMapLayers({
     }, [radarSweepActive, radarSweepRadius, sandboxCenters]);
 
     // ==================== 最终组装 ====================
-
-    const layers = [
-        ...staticLayers,
-        activeTailLayer,
-        hoverPathLayer,
-        roiRadiusLayer,
-        radarSweepLayer,
-        roiCenterModelLayer,
-        quantizedZoom >= 13 ? uavModelLayer.clone({
-            data: { length: activeUAVCount },
-            updateTriggers: {
-                getPosition: currentTimeRef.current,
-                getOrientation: currentTimeRef.current
-            }
-        }) : uavPointLayer.clone({
-            data: {
-                length: activeUAVCount,
-                attributes: {
-                    getPosition: { value: uavPositionsBuffer, size: 3 }
+    // 【性能优化 P0-A】用 useMemo 包裹最终 layers 数组的组装，
+    // 消除 MapContainer 每次 re-render 时的数组重建与 filter(Boolean) 的 GC 脉冲
+    const layers = useMemo(() => {
+        const assembled = [
+            ...staticLayers,
+            activeTailLayer,
+            hoverPathLayer,
+            roiRadiusLayer,
+            radarSweepLayer,
+            roiCenterModelLayer,
+            quantizedZoom >= 13 ? uavModelLayer.clone({
+                data: { length: activeUAVCount },
+                updateTriggers: {
+                    getPosition: currentTimeRef.current,
+                    getOrientation: currentTimeRef.current
                 }
-            },
-            updateTriggers: {
-                getPosition: currentTimeRef.current
-            }
-        }),
-        selectedFlight ? new ScatterplotLayer({
-            id: 'selected-uav-layer',
-            data: [selectedFlight],
-            getPosition: (d: any) => {
-                const t = currentTimeRef.current;
-                const times = d.timestamps;
-                const index = binarySearchTimestamp(times, t);
-                if (index <= 0) return d.path[0];
-                if (index >= times.length) return d.path[d.path.length - 1];
+            }) : uavPointLayer.clone({
+                data: {
+                    length: activeUAVCount,
+                    attributes: {
+                        getPosition: { value: uavPositionsBuffer, size: 3 }
+                    }
+                },
+                updateTriggers: {
+                    getPosition: currentTimeRef.current
+                }
+            }),
+            selectedFlight ? new ScatterplotLayer({
+                id: 'selected-uav-layer',
+                data: [selectedFlight],
+                getPosition: (d: any) => {
+                    const t = currentTimeRef.current;
+                    const times = d.timestamps;
+                    const index = binarySearchTimestamp(times, t);
+                    if (index <= 0) return d.path[0];
+                    if (index >= times.length) return d.path[d.path.length - 1];
 
-                const t0 = times[index - 1];
-                const t1 = times[index];
-                const p0 = d.path[index - 1];
-                const p1 = d.path[index];
-                const ratio = (t - t0) / (t1 - t0);
-                return [
-                    p0[0] + (p1[0] - p0[0]) * ratio,
-                    p0[1] + (p1[1] - p0[1]) * ratio,
-                    (p0[2] + (p1[2] - p0[2]) * ratio) || 0
-                ];
-            },
-            getFillColor: [255, 190, 0, 200],
-            getLineColor: [255, 255, 255, 255],
-            lineWidthMinPixels: 3,
-            radiusMinPixels: 15,
-            radiusMaxPixels: 60,
-            opacity: 1,
-            stroked: true,
-            filled: true,
-            updateTriggers: {
-                getPosition: currentTimeRef.current
-            }
-        }) : null
-    ].filter(Boolean);
+                    const t0 = times[index - 1];
+                    const t1 = times[index];
+                    const p0 = d.path[index - 1];
+                    const p1 = d.path[index];
+                    const ratio = (t - t0) / (t1 - t0);
+                    return [
+                        p0[0] + (p1[0] - p0[0]) * ratio,
+                        p0[1] + (p1[1] - p0[1]) * ratio,
+                        (p0[2] + (p1[2] - p0[2]) * ratio) || 0
+                    ];
+                },
+                getFillColor: [255, 190, 0, 200],
+                getLineColor: [255, 255, 255, 255],
+                lineWidthMinPixels: 3,
+                radiusMinPixels: 15,
+                radiusMaxPixels: 60,
+                opacity: 1,
+                stroked: true,
+                filled: true,
+                updateTriggers: {
+                    getPosition: currentTimeRef.current
+                }
+            }) : null
+        ].filter(Boolean);
+        return assembled;
+    }, [staticLayers, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
+        roiCenterModelLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight]);
 
     return { layers };
 }

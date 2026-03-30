@@ -2,7 +2,7 @@
  * 环境仿真统一 Context
  * 合并原 WeatherContext + WindSpeedContext，统一管理所有环境仿真参数
  */
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, type ReactNode } from 'react';
 
 export type WeatherType = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'hailing';
 
@@ -27,18 +27,24 @@ const EnvironmentContext = createContext<EnvironmentContextType>({
     setWindSpeed: () => {},
 });
 
-/** 环境仿真全局状态 Provider */
+/**
+ * 环境仿真全局状态 Provider
+ * 【性能优化 P0-B】useMemo 稳定 value 引用，
+ * 仅在属性真正变化时才触发消费者 re-render
+ */
 export function EnvironmentProvider({ children }: { children: ReactNode }) {
     const [weather, setWeather] = useState<WeatherType>('sunny');
     const [temperature, setTemperature] = useState<number>(26);
     const [windSpeed, setWindSpeed] = useState<number>(3);
 
+    const value = useMemo(() => ({
+        weather, setWeather,
+        temperature, setTemperature,
+        windSpeed, setWindSpeed,
+    }), [weather, temperature, windSpeed]);
+
     return (
-        <EnvironmentContext.Provider value={{
-            weather, setWeather,
-            temperature, setTemperature,
-            windSpeed, setWindSpeed,
-        }}>
+        <EnvironmentContext.Provider value={value}>
             {children}
         </EnvironmentContext.Provider>
     );

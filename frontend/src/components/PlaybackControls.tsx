@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { CITIES } from '../constants/map';
-import { formatElapsed } from '../utils/animation';
 
 interface PlaybackControlsProps {
     isPlaying: boolean;
@@ -11,13 +10,8 @@ interface PlaybackControlsProps {
     handleCityJump: (cityId: string) => void;
     isDropdownOpen: boolean;
     setIsDropdownOpen: (val: boolean) => void;
-    progressBarRef: React.RefObject<HTMLDivElement | null>;
-    progressTextRef: React.RefObject<HTMLSpanElement | null>;
-    handleProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-    timeRangeMax: number;
 }
 
-// 【竞赛加分 BONUS-2】React.memo 包裹纯展示组件
 const PlaybackControls = memo(function PlaybackControls({
     isPlaying,
     setIsPlaying,
@@ -27,14 +21,10 @@ const PlaybackControls = memo(function PlaybackControls({
     handleCityJump,
     isDropdownOpen,
     setIsDropdownOpen,
-    progressBarRef,
-    progressTextRef,
-    handleProgressClick,
-    timeRangeMax
 }: PlaybackControlsProps) {
     return (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-            <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] px-8 py-5 flex items-center gap-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] min-w-[580px] relative">
+            <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] px-8 py-5 flex items-center gap-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] relative">
                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-t from-slate-900/5 to-transparent pointer-events-none overflow-hidden" style={{ zIndex: 0 }}></div>
 
                 <button
@@ -52,29 +42,6 @@ const PlaybackControls = memo(function PlaybackControls({
                         </svg>
                     )}
                 </button>
-
-                <div className="flex flex-1 flex-col gap-2 relative z-10">
-                    <div className="relative h-2.5 bg-black/5 rounded-full overflow-hidden cursor-pointer shadow-inner border border-white/30"
-                        onClick={handleProgressClick}
-                    >
-                        <div
-                            ref={progressBarRef}
-                            className="absolute top-0 left-0 h-full rounded-full transition-all duration-75"
-                            style={{
-                                width: '0%',
-                                background: 'linear-gradient(90deg, #64748b, #334155)',
-                                boxShadow: '0 0 10px rgba(51, 65, 85, 0.3)'
-                            }}
-                        />
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] font-black text-slate-600 tracking-wider" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.8)' }}>
-                        <div className="flex items-center gap-1.5">
-                            <span ref={progressTextRef}>00:00:00</span>
-                            <span className="text-slate-400 font-medium">/</span>
-                            <span className="text-slate-500">{formatElapsed(timeRangeMax)}</span>
-                        </div>
-                    </div>
-                </div>
 
                 <div className="flex items-center gap-1.5 bg-white/30 p-1.5 rounded-full shadow-inner border border-white/50 relative z-10">
                     {[0.5, 1, 2, 1024].map(speed => (

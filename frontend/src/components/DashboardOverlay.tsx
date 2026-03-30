@@ -38,7 +38,7 @@ function calcRangeLoss(windSpeed: number, temperature: number): number {
     return Math.min(windPenalty + tempPenalty, 50);
 }
 
-const EnvironmentMonitor = () => {
+const EnvironmentMonitor = memo(function EnvironmentMonitor() {
     const { weather, temperature, windSpeed } = useEnvironment();
     const rangeLoss = calcRangeLoss(windSpeed, temperature);
 
@@ -109,7 +109,7 @@ const EnvironmentMonitor = () => {
             </div>
         </div>
     );
-};// 【竞赛加分 BONUS-2】React.memo 包裹纯展示组件，props 极少变化
+});// 【性能优化 P2-F】memo 包裹 EnvironmentMonitor，配合 P0-B Context value 稳定化
 const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpenTasks, onToggleSandbox, isSandboxMode, currentCity = 'shenzhen' }: Props) {
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 p-6 font-sans">

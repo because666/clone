@@ -1,13 +1,5 @@
-/**
- * 【架构优化 P3-2】航线双点选取与任务提交 Hook
- *
- * 从 MapContainer.tsx 中提取 POI 双点选取逻辑：
- * - 第一次点击选取起点
- * - 第二次点击选取终点并自动提交任务审批
- * - 点击同一点取消选择
- */
-
 import { useState, useRef, useCallback } from 'react';
+import { createTask } from '../services/api';
 
 interface PickedPoint {
     lat: number;
@@ -63,40 +55,19 @@ export function useFlightPicking({ currentCity, isSandboxMode, showToast }: UseF
 
             showToast(`正在提交到 ${picked.name || picked.id} 的任务审批...`, 'loading');
 
-            // 异步调用 tasks API 提交调度任务
-            const token = localStorage.getItem('token');
-            fetch('/api/tasks', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                },
-                body: JSON.stringify({
-                    city: currentCity,
-                    from_lat: from.lat, from_lon: from.lon, from_id: from.id,
-                    to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id
-                }),
+            // 【工程化改进 S1】使用统一 API service 层
+            createTask({
+                city: currentCity,
+                from_lat: from.lat, from_lon: from.lon, from_id: from.id,
+                to_lat: picked.lat, to_lon: picked.lon, to_id: picked.id
             })
-                .then(async r => {
-                    const text = await r.text();
-                    try {
-                        const data = JSON.parse(text);
-                        return { data };
-                    } catch {
-                        if (r.status === 504 || r.status === 502) {
-                            throw new Error("后台算法服务未启动 (网关超时)，请确保运行了 python server.py");
-                        }
-                        throw new Error(`非预期的服务器响应 (状态码 ${r.status})`);
-                    }
-                })
-                .then(({ data }) => {
-                    // 兼容新旧格式
-                    if (data.ok || data.code === 0) {
-                        const taskId = data.task_id || data.data?.task_id || '';
+                .then((resp) => {
+                    if (resp.ok) {
+                        const taskId = resp.data?.task_id || '';
                         const displayId = typeof taskId === 'string' ? taskId.substring(0, 8) : taskId;
                         showToast(`🚀 任务提交成功！已进入待审批状态 (ID: ${displayId})`, 'success');
                     } else {
-                        showToast(`提交失败：${data.error || data.message || '未知错误'}`, 'error');
+                        showToast(`提交失败：${resp.message || '未知错误'}`, 'error');
                     }
                 })
                 .catch((e) => {

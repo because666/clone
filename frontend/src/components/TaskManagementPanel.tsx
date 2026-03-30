@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { useSSESubscription } from '../hooks/useSSESubscription';
+import { fetchTasks as fetchTasksApi, updateTaskStatus as updateTaskStatusApi } from '../services/api';
 import { CITY_LABEL_MAP } from '../constants/map';
 import { RefreshCw, Play, CheckCircle2, XCircle, Activity, LayoutList, ChevronLeft, ChevronRight, Navigation, Search } from 'lucide-react';
 
@@ -55,14 +56,9 @@ export default function TaskManagementPanel({
     const fetchTasks = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('/api/tasks', {
-                headers: { 'Authorization': token ? `Bearer ${token}` : '' }
-            });
-            const data = await response.json();
-            if (response.ok && data.ok) {
-                setTasks(data.tasks);
-            }
+            // 【工程化改进 S1】统一 API 调用层
+            const taskList = await fetchTasksApi();
+            setTasks(taskList as Task[]);
         } catch (err) {
             console.error('Failed to fetch tasks:', err);
         } finally {
@@ -99,22 +95,17 @@ export default function TaskManagementPanel({
         return filteredTrajectories.slice(startIndex, startIndex + PAGE_SIZE);
     }, [filteredTrajectories, currentPage]);
 
-    const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    // 【性能优化 P2-E】缓存计算结果，避免 JSX 内每帧重新遍历 tasks 数组
+    const pendingCount = useMemo(() => tasks.filter(t => t.status === 'PENDING').length, [tasks]);
+
+    const updateTaskStatusFn = async (taskId: string, newStatus: string) => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`/api/tasks/${taskId}/status`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                },
-                body: JSON.stringify({ status: newStatus })
-            });
-            const data = await response.json();
-            if (response.ok && data.ok) {
-                fetchTasks(); 
+            // 【工程化改进 S1】统一 API 调用层
+            const resp = await updateTaskStatusApi(taskId, newStatus);
+            if (resp.ok) {
+                fetchTasks();
             } else {
-                alert(`失败: ${data.error}`);
+                alert(`失败: ${resp.message}`);
             }
         } catch (err: any) {
             alert(`操作失败: ${err.message}`);
@@ -163,7 +154,7 @@ export default function TaskManagementPanel({
                             
                             <div className="bg-white/70 rounded-2xl px-5 py-2 border border-white shadow-sm flex items-center gap-3 relative overflow-hidden">
                                 <span className="text-xs font-bold text-slate-600 uppercase tracking-widest relative z-10">排队待审批</span>
-                                <span className="text-2xl font-black text-slate-700 relative z-10 drop-shadow-sm">{tasks.filter(t => t.status === 'PENDING').length}</span>
+                                <span className="text-2xl font-black text-slate-700 relative z-10 drop-shadow-sm">{pendingCount}</span>
                             </div>
                         </div>
 
@@ -288,21 +279,21 @@ export default function TaskManagementPanel({
                                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             {task.status === 'PENDING' && (
                                                                 <>
-                                                                    <button onClick={() => updateTaskStatus(task.id, 'APPROVED')} className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-lg transition-all shadow-sm border border-emerald-200" title="批准">
+                                                                    <button onClick={() => updateTaskStatusFn(task.id, 'APPROVED')} className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-lg transition-all shadow-sm border border-emerald-200" title="批准">
                                                                         <CheckCircle2 size={16} />
                                                                     </button>
-                                                                    <button onClick={() => updateTaskStatus(task.id, 'REJECTED')} className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white rounded-lg transition-all shadow-sm border border-rose-200" title="驳回">
+                                                                    <button onClick={() => updateTaskStatusFn(task.id, 'REJECTED')} className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white rounded-lg transition-all shadow-sm border border-rose-200" title="驳回">
                                                                         <XCircle size={16} />
                                                                     </button>
                                                                 </>
                                                             )}
                                                             {task.status === 'APPROVED' && (
-                                                                <button onClick={() => updateTaskStatus(task.id, 'EXECUTING')} className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg transition-all shadow-sm border border-indigo-200 text-[11px] font-black tracking-wide" title="派发执行">
+                                                                <button onClick={() => updateTaskStatusFn(task.id, 'EXECUTING')} className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg transition-all shadow-sm border border-indigo-200 text-[11px] font-black tracking-wide" title="派发执行">
                                                                     <Play size={12} fill="currentColor" /> 执行
                                                                 </button>
                                                             )}
                                                             {task.status === 'EXECUTING' && (
-                                                                <button onClick={() => updateTaskStatus(task.id, 'COMPLETED')} className="px-2.5 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-300 rounded-lg transition-all border border-slate-300 text-[11px] font-black shadow-sm" title="标记完成">
+                                                                <button onClick={() => updateTaskStatusFn(task.id, 'COMPLETED')} className="px-2.5 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-300 rounded-lg transition-all border border-slate-300 text-[11px] font-black shadow-sm" title="标记完成">
                                                                     结束
                                                                 </button>
                                                             )}
