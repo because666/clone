@@ -262,12 +262,6 @@ export default function AiPreflightModal({
                 </div>
             </div>
 
-            <style>{`
-                @keyframes progress {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(300%); }
-                }
-            `}</style>
         </div>
     );
 }

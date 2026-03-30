@@ -80,8 +80,7 @@ def batch_generate():
     OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
     data = build_output(results, city)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"))
+    out_path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 
     # 双写策略：同步写入数据库持久化
     batch_id = str(uuid.uuid4())
@@ -170,8 +169,7 @@ def single_generate():
         out_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
 
         if append and out_path.exists():
-            with open(out_path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
+            existing = json.loads(out_path.read_text(encoding="utf-8"))
             existing["trajectories"].append({
                 "id": result.flight_id,
                 "path": result.path,
@@ -189,8 +187,7 @@ def single_generate():
         else:
             data = build_output([result], city)
 
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, separators=(",", ":"))
+        out_path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 
     elapsed = time.time() - t0
     logger.info(f"[single] 完成: {fid}, 违规段: {result.nfz_violations}, 耗时: {elapsed:.3f}s")
@@ -224,27 +221,29 @@ def get_trajectories():
     if not logs:
         json_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
         if json_path.exists():
-            with open(json_path, "r", encoding="utf-8") as f:
-                return jsonify(json.load(f))
+            return jsonify(json.loads(json_path.read_text(encoding="utf-8")))
         return jsonify({"code": 40400, "data": None, "message": f"未找到城市 {city} 的轨迹数据"}), 404
 
     trajectories = []
     total_dur = 0.0
     valid_count = 0
 
-    for log in logs:
-        timestamps = json.loads(log.timestamps_data)
-        path = json.loads(log.path_data)
+    # 使用批量 C-level 推导式，大幅压缩循环开销
+    parsed_logs = [
+        (log.flight_id, json.loads(log.path_data), json.loads(log.timestamps_data), log.start_offset or 0.0)
+        for log in logs if log.path_data and log.timestamps_data
+    ]
 
+    for fid, path, timestamps, offset in parsed_logs:
         if len(timestamps) >= 2:
             total_dur += timestamps[-1] - timestamps[0]
             valid_count += 1
 
         traj = {
-            "id": log.flight_id,
+            "id": fid,
             "path": path,
             "timestamps": timestamps,
-            "start_offset": log.start_offset or 0.0,
+            "start_offset": offset,
         }
         trajectories.append(traj)
 

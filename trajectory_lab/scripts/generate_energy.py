@@ -64,8 +64,7 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
     out_path = ROOT / 'frontend' / 'public' / 'data' / 'processed' / f'{city}_energy_predictions.json'
     
     print(f"Loading trajectories from {traj_path}...")
-    with open(traj_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    data = json.loads(Path(traj_path).read_text(encoding='utf-8'))
         
     trajectories = data.get('trajectories', [])
     if not trajectories:
@@ -149,8 +148,7 @@ def predict_energy_for_trajectories(model, city='shenzhen'):
         }
     
     print(f"Saving predictions to {out_path}...")
-    with open(out_path, 'w', encoding='utf-8') as f:
-        json.dump(predictions, f)
+    Path(out_path).write_text(json.dumps(predictions), encoding='utf-8')
         
     print("Done!")
 

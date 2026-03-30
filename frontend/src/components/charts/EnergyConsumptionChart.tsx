@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
+const CHART_STYLE = { height: '240px', width: '100%' };
+const CHART_STYLE_LG = { height: '320px', width: '100%' };
+
 interface Props {
     energyData: any;
 }
@@ -62,5 +65,5 @@ export default function EnergyConsumptionChart({ energyData }: Props) {
         };
     }, [energyData]);
 
-    return <ReactECharts option={option} style={{ height: '240px', width: '100%' }} />;
+    return <ReactECharts option={option} style={CHART_STYLE} />;
 }

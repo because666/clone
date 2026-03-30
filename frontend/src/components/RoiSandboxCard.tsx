@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Target, Layers, TrendingUp, Package, X, Loader2, DollarSign, Clock } from 'lucide-react';
 
 interface RoiData {
@@ -16,12 +17,13 @@ interface Props {
   error: string | null;
   radius: number;
   isCompareMode: boolean;
+  isRightPanelOpen?: boolean;
   onToggleCompareMode: (val: boolean) => void;
   onRadiusChange: (r: number) => void;
   onClose: () => void;
 }
 
-export default function RoiSandboxCard({ data, isLoading, error, radius, isCompareMode, onToggleCompareMode, onRadiusChange, onClose }: Props) {
+export default memo(function RoiSandboxCard({ data, isLoading, error, radius, isCompareMode, isRightPanelOpen, onToggleCompareMode, onRadiusChange, onClose }: Props) {
   const isComparing = data && data.length > 1;
   const cardWidth = isComparing ? 'w-[36rem]' : 'w-[24rem]';
 
@@ -29,7 +31,7 @@ export default function RoiSandboxCard({ data, isLoading, error, radius, isCompa
   const bestPayback = isComparing ? Math.min(data[0].est_payback_years, data[1].est_payback_years) : -1;
 
   return (
-    <div className={`absolute right-6 top-24 ${cardWidth} bg-white/60 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] overflow-hidden flex flex-col pointer-events-auto z-[60] animate-in fade-in slide-in-from-right-8 duration-500 transition-all`}>
+    <div className={`absolute ${isRightPanelOpen ? 'right-[384px]' : 'right-6'} top-[280px] ${cardWidth} bg-white/75 backdrop-blur-2xl border border-white/90 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-slate-900/5 overflow-hidden flex flex-col pointer-events-auto z-[60] animate-in fade-in duration-500 transition-all`}>
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/5 to-transparent pointer-events-none"></div>
       
       {/* Header */}
@@ -164,4 +166,4 @@ export default function RoiSandboxCard({ data, isLoading, error, radius, isCompa
       </div>
     </div>
   );
-}
+});

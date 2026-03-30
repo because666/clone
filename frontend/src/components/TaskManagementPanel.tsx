@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { useSSESubscription } from '../hooks/useSSESubscription';
@@ -53,7 +53,7 @@ export default function TaskManagementPanel({
     const [currentPage, setCurrentPage] = useState(1);
     const PAGE_SIZE = 22; // 增加信息密度，恢复同屏数据量
 
-    const fetchTasks = async () => {
+    const fetchTasks = useCallback(async () => {
         setLoading(true);
         try {
             // 【工程化改进 S1】统一 API 调用层
@@ -64,14 +64,14 @@ export default function TaskManagementPanel({
         } finally {
             setLoading(false);
         }
-    };
+    }, [setTasks, setLoading]);
 
     useEffect(() => {
         if (!isVisible) return;
         
         // 初始挂载时拉取全量数据
         fetchTasks();
-    }, [isVisible]);
+    }, [isVisible, fetchTasks]);
 
     // 【架构优化 P1-2】使用全局单例 SSE 连接，不再独立创建 EventSource
     useSSESubscription(fetchTasks, isVisible);
@@ -98,7 +98,7 @@ export default function TaskManagementPanel({
     // 【性能优化 P2-E】缓存计算结果，避免 JSX 内每帧重新遍历 tasks 数组
     const pendingCount = useMemo(() => tasks.filter(t => t.status === 'PENDING').length, [tasks]);
 
-    const updateTaskStatusFn = async (taskId: string, newStatus: string) => {
+    const updateTaskStatusFn = useCallback(async (taskId: string, newStatus: string) => {
         try {
             // 【工程化改进 S1】统一 API 调用层
             const resp = await updateTaskStatusApi(taskId, newStatus);
@@ -110,7 +110,20 @@ export default function TaskManagementPanel({
         } catch (err: any) {
             alert(`操作失败: ${err.message}`);
         }
-    };
+    }, [fetchTasks]);
+
+    const handleTabApproval = useCallback(() => setActiveTab('approval'), []);
+    const handleTabGlobal = useCallback(() => setActiveTab('global'), []);
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value), []);
+    const handleSearchClear = useCallback(() => setSearchQuery(''), []);
+    const handleTaskApprove = useCallback((taskId: string) => updateTaskStatusFn(taskId, 'APPROVED'), [updateTaskStatusFn]);
+    const handleTaskReject = useCallback((taskId: string) => updateTaskStatusFn(taskId, 'REJECTED'), [updateTaskStatusFn]);
+    const handleTaskExecute = useCallback((taskId: string) => updateTaskStatusFn(taskId, 'EXECUTING'), [updateTaskStatusFn]);
+    const handleTaskComplete = useCallback((taskId: string) => updateTaskStatusFn(taskId, 'COMPLETED'), [updateTaskStatusFn]);
+    const handlePagePrev = useCallback(() => setCurrentPage(p => Math.max(1, p - 1)), []);
+    const handlePageNext = useCallback(() => setCurrentPage(p => Math.min(totalPages, p + 1)), [totalPages]);
+
+
 
     if (!isVisible) return null;
 
@@ -134,7 +147,7 @@ export default function TaskManagementPanel({
             <div className="relative z-10 flex flex-col h-full overflow-hidden">
                 {/* 头部标题与统计卡片 */}
                 <div className="flex justify-between items-center mb-5 pb-4 border-b-2 border-white/50 shrink-0">
-                    <h3 className="text-xl font-black text-slate-800 tracking-wider flex items-center gap-3" style={{ textShadow: '0 2px 5px rgba(255,255,255,0.9)' }}>
+                    <h3 className="text-xl font-black text-slate-800 tracking-wider flex items-center gap-3 drop-shadow-sm">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line>
                         </svg>
@@ -171,13 +184,13 @@ export default function TaskManagementPanel({
                     <div className="px-5 py-3 border-b-2 border-white/80 flex justify-between items-center bg-white/50">
                         <div className="flex gap-3 bg-slate-200/50 p-1.5 rounded-xl shadow-inner">
                             <button 
-                                onClick={() => setActiveTab('approval')} 
+                                onClick={handleTabApproval} 
                                 className={`flex items-center gap-2 px-5 py-1.5 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'approval' ? 'bg-white text-indigo-700 shadow-sm border border-white' : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'}`}
                             >
                                 <LayoutList size={16} /> 业务航线审批流
                             </button>
                             <button 
-                                onClick={() => setActiveTab('global')} 
+                                onClick={handleTabGlobal} 
                                 className={`flex items-center gap-2 px-5 py-1.5 rounded-lg text-[13px] font-bold transition-all ${activeTab === 'global' ? 'bg-white text-emerald-700 shadow-sm border border-white' : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'}`}
                             >
                                 <Activity size={16} /> 实时全域监控
@@ -195,12 +208,12 @@ export default function TaskManagementPanel({
                                         type="text" 
                                         placeholder="搜索航班序列号..." 
                                         value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onChange={handleSearchChange}
                                         className="pl-9 pr-4 py-1.5 bg-white/80 border border-white shadow-sm rounded-lg text-xs font-bold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:bg-white transition-all w-56"
                                     />
                                     {searchQuery && (
                                         <button 
-                                            onClick={() => setSearchQuery('')}
+                                            onClick={handleSearchClear}
                                             className="absolute right-2.5 text-slate-400 hover:text-slate-600"
                                         >
                                             <XCircle size={14} />
@@ -279,21 +292,21 @@ export default function TaskManagementPanel({
                                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             {task.status === 'PENDING' && (
                                                                 <>
-                                                                    <button onClick={() => updateTaskStatusFn(task.id, 'APPROVED')} className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-lg transition-all shadow-sm border border-emerald-200" title="批准">
+                                                                    <button onClick={() => handleTaskApprove(task.id)} className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-lg transition-all shadow-sm border border-emerald-200" title="批准">
                                                                         <CheckCircle2 size={16} />
                                                                     </button>
-                                                                    <button onClick={() => updateTaskStatusFn(task.id, 'REJECTED')} className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white rounded-lg transition-all shadow-sm border border-rose-200" title="驳回">
+                                                                    <button onClick={() => handleTaskReject(task.id)} className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white rounded-lg transition-all shadow-sm border border-rose-200" title="驳回">
                                                                         <XCircle size={16} />
                                                                     </button>
                                                                 </>
                                                             )}
                                                             {task.status === 'APPROVED' && (
-                                                                <button onClick={() => updateTaskStatusFn(task.id, 'EXECUTING')} className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg transition-all shadow-sm border border-indigo-200 text-[11px] font-black tracking-wide" title="派发执行">
+                                                                <button onClick={() => handleTaskExecute(task.id)} className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg transition-all shadow-sm border border-indigo-200 text-[11px] font-black tracking-wide" title="派发执行">
                                                                     <Play size={12} fill="currentColor" /> 执行
                                                                 </button>
                                                             )}
                                                             {task.status === 'EXECUTING' && (
-                                                                <button onClick={() => updateTaskStatusFn(task.id, 'COMPLETED')} className="px-2.5 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-300 rounded-lg transition-all border border-slate-300 text-[11px] font-black shadow-sm" title="标记完成">
+                                                                <button onClick={() => handleTaskComplete(task.id)} className="px-2.5 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-300 rounded-lg transition-all border border-slate-300 text-[11px] font-black shadow-sm" title="标记完成">
                                                                     结束
                                                                 </button>
                                                             )}
@@ -377,7 +390,7 @@ export default function TaskManagementPanel({
                             </div>
                             <div className="flex gap-1.5">
                                 <button 
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    onClick={handlePagePrev}
                                     disabled={currentPage === 1}
                                     className="p-1 rounded-md bg-white border border-slate-300 disabled:opacity-50 hover:bg-slate-50 hover:shadow-sm transition-all text-slate-700"
                                 >
@@ -387,7 +400,7 @@ export default function TaskManagementPanel({
                                     {currentPage} / {totalPages}
                                 </span>
                                 <button 
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    onClick={handlePageNext}
                                     disabled={currentPage === totalPages}
                                     className="p-1 rounded-md bg-white border border-slate-300 disabled:opacity-50 hover:bg-slate-50 hover:shadow-sm transition-all text-slate-700"
                                 >

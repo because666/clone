@@ -11,6 +11,8 @@ interface Props {
     onToggleSandbox: () => void;
     isSandboxMode: boolean;
     currentCity?: string;
+    isRightPanelOpen: boolean;
+    onToggleRightPanel: () => void;
 }
 
 /** 天气类型对应的显示标签 */
@@ -111,14 +113,14 @@ const EnvironmentMonitor = memo(function EnvironmentMonitor() {
         </div>
     );
 });// 【性能优化 P2-F】memo 包裹 EnvironmentMonitor，配合 P0-B Context value 稳定化
-const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpenTasks, onToggleSandbox, isSandboxMode, currentCity = 'shenzhen' }: Props) {
+const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpenTasks, onToggleSandbox, isSandboxMode, currentCity = 'shenzhen', isRightPanelOpen, onToggleRightPanel }: Props) {
     const navigate = useNavigate();
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 p-6 font-sans">
-            <RightControlPanel />
+            <RightControlPanel isOpen={isRightPanelOpen} onToggle={onToggleRightPanel} />
 
             {/* Top Right Environment Monitor */}
-            <div className="absolute top-6 right-6 z-[60]">
+            <div className={`absolute top-6 z-[60] transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${isRightPanelOpen ? 'right-[384px]' : 'right-6'}`}>
                 <EnvironmentMonitor />
             </div>
 

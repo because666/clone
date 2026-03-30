@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { useEnvironment } from '../contexts/EnvironmentContext';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 
@@ -9,7 +9,7 @@ interface FlightDetailPanelProps {
     setSelectedFlight: (flight: any) => void;
 }
 
-export default function FlightDetailPanel({
+export default memo(function FlightDetailPanel({
     selectedFlight,
     energyData,
     currentTimeRef,
@@ -37,7 +37,7 @@ export default function FlightDetailPanel({
     const windFactor = calcWindFactor(windSpeed);
 
     return (
-        <div className="absolute top-28 left-8 z-30 w-80 bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] text-slate-800 p-6 pointer-events-auto transition-all animate-in fade-in slide-in-from-left-4 overflow-hidden">
+        <div className="absolute top-[320px] left-6 z-30 w-80 bg-white/75 backdrop-blur-2xl border border-white/90 rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-slate-900/5 text-slate-800 p-6 pointer-events-auto transition-all animate-in fade-in slide-in-from-left-4 overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-900/5 to-transparent pointer-events-none"></div>
             <div className="relative z-10">
                 <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-300/50">
@@ -114,4 +114,4 @@ export default function FlightDetailPanel({
             </div>
         </div>
     );
-}
+});

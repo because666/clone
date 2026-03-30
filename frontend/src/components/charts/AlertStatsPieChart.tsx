@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
+const CHART_STYLE = { height: '240px', width: '100%' };
+const CHART_STYLE_LG = { height: '320px', width: '100%' };
+
 interface Props {
     lowBattery: number;
     dangerZone: number;
@@ -60,5 +63,5 @@ export default function AlertStatsPieChart({ lowBattery, dangerZone, conflict }:
         };
     }, [lowBattery, dangerZone, conflict]);
 
-    return <ReactECharts option={option} style={{ height: '320px', width: '100%' }} />;
+    return <ReactECharts option={option} style={CHART_STYLE_LG} />;
 }

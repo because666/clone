@@ -110,10 +110,11 @@ def list_tasks():
     user_ids = {t.creator_id for t in tasks if t.creator_id}
     users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
 
-    result = []
+    task_strs = []
     for t in tasks:
         creator = users.get(t.creator_id)
-        result.append({
+        creator_name = creator.username if creator else 'Unknown'
+        base_dict = {
             "id": t.id,
             "city": t.city,
             "flight_id": t.flight_id,
@@ -124,13 +125,18 @@ def list_tasks():
             "start_poi_id": t.start_poi_id,
             "end_poi_id": t.end_poi_id,
             "status": t.status,
-            "trajectory_data": json.loads(t.trajectory_data) if t.trajectory_data else None,
-            "creator_username": creator.username if creator else 'Unknown',
+            "creator_username": creator_name,
             "created_at": t.created_at.isoformat(),
             "updated_at": t.updated_at.isoformat()
-        })
+        }
+        # 直接切割组装字符串，跳过 json.loads() 对 CPU 的锁死
+        base_json = json.dumps(base_dict)
+        traj_str = t.trajectory_data if t.trajectory_data else "null"
+        final_task_json = base_json[:-1] + f', "trajectory_data": {traj_str}}}'
+        task_strs.append(final_task_json)
 
-    return jsonify({"code": 0, "data": {"tasks": result}, "message": "success"})
+    final_json_str = f'{{"code": 0, "data": {{"tasks": [{",".join(task_strs)}]}}, "message": "success"}}'
+    return Response(final_json_str, mimetype='application/json')
 
 
 @tasks_bp.route("/tasks/stream", methods=["GET"])

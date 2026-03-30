@@ -1,4 +1,4 @@
-import { useState, memo, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { 
   Activity, ShieldAlert, Zap, Wind, Sun, Cloud, CloudRain, 
   CloudSnow, CloudLightning, BatteryWarning, AlertTriangle
@@ -14,11 +14,16 @@ const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] =
     { type: 'snowy', icon: <CloudSnow size={14} />, label: '降雪' },
     { type: 'hailing', icon: <CloudLightning size={14} />, label: '冰雹' },
 ];
+interface RightControlPanelProps {
+    isOpen: boolean;
+    onToggle: () => void;
+}
+
 // 【性能优化 P1-D】memo 包裹，避免 DashboardOverlay 父组件 re-render 时无条件重建
-const RightControlPanel = memo(function RightControlPanel() {
+const RightControlPanel = memo(function RightControlPanel({ isOpen, onToggle }: RightControlPanelProps) {
     const { windSpeed, setWindSpeed, weather, setWeather, temperature, setTemperature } = useEnvironment();
     const { alerts, totalCounts } = useAlerts();
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const isCollapsed = !isOpen;
 
     const getWeatherIcon = () => {
         switch (weather) {
@@ -40,7 +45,7 @@ const RightControlPanel = memo(function RightControlPanel() {
             
             {/* 隐藏/显示触发拉手 */}
             <button
-                onClick={() => setIsCollapsed(!isCollapsed)}
+                onClick={onToggle}
                 className="absolute left-[-26px] top-1/2 -translate-y-1/2 w-10 h-24 bg-indigo-600/80 backdrop-blur-3xl border border-white/40 rounded-l-2xl pointer-events-auto flex items-center justify-center text-white hover:bg-indigo-500 transition-all group shadow-[-8px_0_24px_rgba(99,102,241,0.3)]"
                 title={isCollapsed ? "展开面板" : "隐藏面板"}
             >

@@ -9,7 +9,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { GeoJsonLayer, ColumnLayer, PathLayer, ScatterplotLayer, ArcLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
-import { uavPositionsBuffer, uavOrientationsBuffer, activeUAVTrajectories, activeUAVCount, conflictPairsBuffer, conflictPairCount } from '../utils/animation';
+import { uavPositionsBuffer, uavOrientationsBuffer, activeUAVTrajectories, activeUAVCount, conflictPairsBuffer } from '../utils/animation';
 import { binarySearchTimestamp } from '../utils/physics';
 import type { VisionMode } from '../components/VisionModeDock';
 
@@ -463,21 +463,26 @@ export function useMapLayers({
             radarSweepLayer,    // 添加沙盘动态激波扩散层
             roiCenterModelLayer,
             // ============ 4D 冲突检测弧线层 ============
-            conflictPairCount > 0 ? new ArcLayer({
+            new ArcLayer({
                 id: 'conflict-arc-layer',
-                data: Array.from({ length: conflictPairCount }, (_, i) => ({
-                    source: [conflictPairsBuffer[i * 6], conflictPairsBuffer[i * 6 + 1], conflictPairsBuffer[i * 6 + 2]],
-                    target: [conflictPairsBuffer[i * 6 + 3], conflictPairsBuffer[i * 6 + 4], conflictPairsBuffer[i * 6 + 5]],
-                })),
-                getSourcePosition: (d: any) => d.source,
-                getTargetPosition: (d: any) => d.target,
-                getSourceColor: [255, 60, 60, 220],
-                getTargetColor: [255, 160, 60, 220],
-                getWidth: 3,
-                widthMinPixels: 2,
-                getHeight: 0.3,
+                data: { length: 0 },
+                getSourcePosition: (_: any, { index }: any) => [
+                    conflictPairsBuffer[index * 6], 
+                    conflictPairsBuffer[index * 6 + 1], 
+                    conflictPairsBuffer[index * 6 + 2]
+                ],
+                getTargetPosition: (_: any, { index }: any) => [
+                    conflictPairsBuffer[index * 6 + 3], 
+                    conflictPairsBuffer[index * 6 + 4], 
+                    conflictPairsBuffer[index * 6 + 5]
+                ],
+                getSourceColor: [255, 0, 0, 255],
+                getTargetColor: [255, 140, 0, 255],
+                getWidth: 6,
+                widthMinPixels: 5,
+                getHeight: 1.2,
                 pickable: false,
-            }) : null,
+            }),
             haloVisible ? new ScatterplotLayer({
                 id: 'uav-halo-glow-layer',
                 data: {

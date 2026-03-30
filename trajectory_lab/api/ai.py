@@ -9,15 +9,22 @@ from shapely.geometry import Point, LineString
 
 logger = logging.getLogger("TrajServer")
 
+from pathlib import Path
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def load_nofly_geojson():
+    current_dir = os.path.dirname(__file__)
+    geojson_path = os.path.normpath(os.path.join(current_dir, "../../data/processed/geojson/poi_sensitive.geojson"))
+    if not os.path.exists(geojson_path):
+        return None
+    return json.loads(Path(geojson_path).read_text(encoding='utf-8'))
+
 def check_nofly_zones(slon, slat, elon, elat):
     try:
-        current_dir = os.path.dirname(__file__)
-        geojson_path = os.path.normpath(os.path.join(current_dir, "../../data/processed/geojson/poi_sensitive.geojson"))
-        if not os.path.exists(geojson_path):
+        data = load_nofly_geojson()
+        if not data:
             return []
-            
-        with open(geojson_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
             
         line = LineString([(slon, slat), (elon, elat)])
         intersected = []

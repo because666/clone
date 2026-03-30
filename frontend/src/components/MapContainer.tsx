@@ -35,15 +35,6 @@ import { ErrorAlert } from './ErrorAlert';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MapSkeleton } from './MapSkeleton';
 
-// 【性能优化 P5】静态 CSSOM 化：剥离 Render Tree 中的动态模板字符串，避免拖拽重绘时的样式表抖动
-const OVERLAY_CSS = `
-    .map-filter-active .maplibregl-canvas {
-        filter: invert(0.85) hue-rotate(180deg) brightness(0.9) contrast(1.4) !important;
-    }
-    .maplibregl-canvas {
-        transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-`;
 
 export default function MapContainer() {
     const {
@@ -75,6 +66,7 @@ export default function MapContainer() {
 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [currentCity, setCurrentCity] = useState("shenzhen");
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
 
     // 【架构优化 P3-1】沙盘逻辑提取到独立 Hook
     const {
@@ -107,6 +99,20 @@ export default function MapContainer() {
         hoverInfoRef.current = info;
     }, []);
     const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
+
+    // 阻断渲染雪崩，将向下传递的事件处理全部用 useCallback 包装
+    const handleOpenAnalytics = useCallback(() => setIsAnalyticsOpen(true), []);
+    const handleOpenTasks = useCallback(() => setIsTasksOpen(true), []);
+    const handleToggleRightPanel = useCallback(() => setIsRightPanelOpen(prev => !prev), []);
+    const handleToggleSandbox = useCallback(() => {
+        if (isSandboxMode) closeSandbox();
+        else toggleSandbox();
+    }, [isSandboxMode, closeSandbox, toggleSandbox]);
+
+    const handleCloseAnalytics = useCallback(() => setIsAnalyticsOpen(false), []);
+    const handleCloseTasks = useCallback(() => setIsTasksOpen(false), []);
+    const handleContextMenu = useCallback((e: React.MouseEvent) => e.preventDefault(), []);
+
 
     // 将 zoom 量化为 0.5 级阶梯，只有跨阶梯时才触发依赖 zoom 的图层重建
     const quantizedZoom = useMemo(() => Math.round((viewState.zoom || 11) * 2) / 2, [viewState.zoom]);
@@ -150,10 +156,10 @@ export default function MapContainer() {
                         }
                     }
                 }
-                
+
                 // 【性能优化 P4-B】精准垃圾回收：剔除后端已完成的任务（失去连接状态），防止系统随时间运行产生内存溢出与渲染泄露
                 const aliveTrajs = prev.filter((t: any) => activeIds.has(t.id));
-                
+
                 if (newTrajs.length > 0 || aliveTrajs.length !== prev.length) {
                     // 【性能优化 P2-B】对 SSE 注入的新轨迹执行 SoA 预编译，
                     // 确保动画循环中走 Float32Array 快路径而非 AoS 慢路径
@@ -175,7 +181,7 @@ export default function MapContainer() {
 
     const handleFocusFlight = useCallback((flight: any) => {
         if (!flight || !flight.path || !flight.timestamps) return;
-        
+
         setSelectedFlight(flight);
         // 开启硬锁定跟拍模式
         trackingStateRef.current = { isTracking: true, lockedFlight: flight };
@@ -184,7 +190,7 @@ export default function MapContainer() {
         const times = flight.timestamps;
         // 【性能优化】O(logN) 二分搜索替代 O(N) findIndex
         const index = binarySearchTimestamp(times, t);
-        
+
         let lon, lat;
         if (index > 0 && index < times.length) {
             const t0 = times[index - 1];
@@ -220,7 +226,7 @@ export default function MapContainer() {
     const handleViewStateChange = useCallback(({ viewState: nextViewState, interactionState }: any) => {
         const { longitude, latitude, zoom, pitch, bearing } = nextViewState;
         setViewState({ longitude, latitude, zoom, pitch, bearing, maxPitch: INITIAL_VIEW_STATE.maxPitch });
-        
+
         // 任何人为的交互拖拽操作立即解除硬锁定，退回手动视野模式
         if (interactionState?.isDragging || interactionState?.isPanning || interactionState?.isRotating) {
             trackingStateRef.current.isTracking = false;
@@ -292,14 +298,12 @@ export default function MapContainer() {
     return (
         <ErrorBoundary
             title="地图加载错误"
-            onRetry={() => loadCityData(currentCity, () => setSelectedFlight(null))}
+            onRetry={handleRetryLoad}
         >
             <div
-                className={`absolute inset-0 z-0 ${visionMode !== 'default' ? 'map-filter-active' : ''}`}
-                style={{ background: '#f0f0f0' }}
-                onContextMenu={(e) => e.preventDefault()}
+                className={`absolute inset-0 z-0 bg-[#f0f0f0] ${visionMode !== 'default' ? 'map-filter-active' : ''}`}
+                onContextMenu={handleContextMenu}
             >
-                <style>{OVERLAY_CSS}</style>
                 <DeckGL
                     ref={deckRef}
                     initialViewState={viewState}
@@ -324,18 +328,14 @@ export default function MapContainer() {
                     />
                 </DeckGL>
 
-                <DashboardOverlay 
-                    onOpenAnalytics={() => setIsAnalyticsOpen(true)} 
-                    onOpenTasks={() => setIsTasksOpen(true)} 
-                    onToggleSandbox={() => {
-                        if (isSandboxMode) {
-                            closeSandbox();
-                        } else {
-                            toggleSandbox();
-                        }
-                    }}
+                <DashboardOverlay
+                    onOpenAnalytics={handleOpenAnalytics}
+                    onOpenTasks={handleOpenTasks}
+                    onToggleSandbox={handleToggleSandbox}
                     isSandboxMode={isSandboxMode}
-                    currentCity={currentCity} 
+                    currentCity={currentCity}
+                    isRightPanelOpen={isRightPanelOpen}
+                    onToggleRightPanel={handleToggleRightPanel}
                 />
 
                 <HoverTooltip hoverInfo={hoverInfo} />
@@ -347,6 +347,7 @@ export default function MapContainer() {
                         error={roiError}
                         radius={sandboxRadius}
                         isCompareMode={sandboxCompareMode}
+                        isRightPanelOpen={isRightPanelOpen}
                         onToggleCompareMode={handleToggleCompareMode}
                         onRadiusChange={handleRadiusChange}
                         onClose={closeSandbox}
@@ -362,12 +363,12 @@ export default function MapContainer() {
 
                 <Suspense fallback={null}>
                     {isAnalyticsOpen && (
-                        <AnalyticsPanel 
+                        <AnalyticsPanel
                             trajectories={trajectories}
                             energyData={energyData}
                             currentTimeRef={currentTimeRef}
                             isVisible={isAnalyticsOpen}
-                            onClose={() => setIsAnalyticsOpen(false)}
+                            onClose={handleCloseAnalytics}
                         />
                     )}
                 </Suspense>
@@ -376,7 +377,7 @@ export default function MapContainer() {
                     {isTasksOpen && (
                         <TaskManagementPanel
                             isVisible={isTasksOpen}
-                            onClose={() => setIsTasksOpen(false)}
+                            onClose={handleCloseTasks}
                             activeUAVCount={trajectories.length}
                             trajectories={trajectories}
                             currentCity={currentCity}
@@ -425,10 +426,10 @@ export default function MapContainer() {
                     💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
                 </div>
 
-                {/* 毛玻璃风格的灵动胶囊提示条，不再遮挡视线 */}
+                {/* 毛玻璃风格的灵动胶囊提示条，不再遮挡视线，已切换白昼主题 */}
                 {toastState && (
                     <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-top-4">
-                        <div className="bg-slate-900/60 text-white px-6 py-2.5 rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-white/10 backdrop-blur-md flex items-center space-x-3">
+                        <div className="bg-white/85 text-slate-700 px-6 py-2.5 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-white ring-1 ring-slate-900/5 backdrop-blur-xl flex items-center space-x-3 transition-colors">
                             {toastState.type === 'info' && <span className="text-lg">🎯</span>}
                             {toastState.type === 'success' && <span className="text-lg drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">✨</span>}
                             {toastState.type === 'error' && <span className="text-lg drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]">❌</span>}
@@ -456,7 +457,7 @@ export default function MapContainer() {
                 />
 
                 <WeatherOverlay />
-                <AiMascot />
+                <AiMascot isRightPanelOpen={isRightPanelOpen} />
             </div>
         </ErrorBoundary>
     );

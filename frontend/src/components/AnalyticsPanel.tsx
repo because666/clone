@@ -11,6 +11,8 @@ interface AnalyticsPanelProps {
     onClose: () => void;
 }
 
+const PANEL_SHADOW = { textShadow: '0 1px 3px rgba(255,255,255,0.9)' };
+
 export default function AnalyticsPanel({
     trajectories,
     energyData,
@@ -25,7 +27,7 @@ export default function AnalyticsPanel({
             
             <div className="relative z-10 flex flex-col h-full">
                 <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/30">
-                    <h3 className="text-lg font-black text-slate-800 tracking-wider flex items-center gap-3" style={{ textShadow: '0 1px 3px rgba(255,255,255,0.9)' }}>
+                    <h3 className="text-lg font-black text-slate-800 tracking-wider flex items-center gap-3" style={PANEL_SHADOW}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600">
                             <line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line>
                         </svg>

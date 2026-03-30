@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
-import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, uavActiveIndicesBuffer, conflictPairsBuffer, setConflictPairCount } from '../utils/animation';
+import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, uavActiveIndicesBuffer, conflictPairsBuffer, setConflictPairCount, conflictPairCount } from '../utils/animation';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 import AnimationWorker from '../workers/animation.worker?worker';
 
@@ -67,6 +67,21 @@ const LAYER_CLONERS = new Map<string, LayerCloner>([
     ['uav-point-layer', pointLayerCloner],
     ['uav-halo-glow-layer', pointLayerCloner],
     ['uav-halo-core-layer', pointLayerCloner],
+    ['conflict-arc-layer', (layer, currentTime) => {
+        // 中等频率脉冲，清晰且不刺眼
+        const pulse = (Math.sin(currentTime * 12) + 1) / 2;
+        return layer.clone({
+            data: { length: conflictPairCount },
+            getSourceColor: [255, 30, 30, 150 + 80 * pulse],
+            getTargetColor: [255, 140, 30, 150 + 80 * pulse],
+            widthMinPixels: 5 + 4 * pulse, // 发光但不拉扯画面的线宽
+            updateTriggers: {
+                ...(layer.props.updateTriggers || {}),
+                getSourcePosition: currentTime,
+                getTargetPosition: currentTime
+            }
+        });
+    }],
 ]);
 
 function cloneLayers(deck: any, currentTime: number): any[] {

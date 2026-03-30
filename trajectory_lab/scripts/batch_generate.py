@@ -171,8 +171,7 @@ def main():
     OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_BASE / f"{args.city}_uav_trajectories.json"
     data = build_output(results, args.city)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"))
+    out_path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 
     size_kb = out_path.stat().st_size / 1024
     logger.info(f"✅ JSON 输出: {out_path}  ({size_kb:.1f} KB)")

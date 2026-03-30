@@ -11,6 +11,7 @@ import os
 import json
 import math
 import logging
+from functools import lru_cache
 
 from flask import Blueprint, request, jsonify
 
@@ -31,6 +32,7 @@ def init_analytics_bp(data_root: str, poi_cache_ref):
     _poi_cache = poi_cache_ref
 
 
+@lru_cache(maxsize=32)
 def _load_city_trajectories(city: str):
     """
     加载指定城市的轨迹数据
@@ -39,17 +41,15 @@ def _load_city_trajectories(city: str):
     # 1. 先查数据库
     logs = FlightLog.query.filter_by(city=city).all()
     if logs:
-        trajectories = []
-        for log in logs:
-            try:
-                traj = {
-                    "id": log.flight_id,
-                    "path": json.loads(log.path_data),
-                    "timestamps": json.loads(log.timestamps_data),
-                }
-                trajectories.append(traj)
-            except Exception:
-                continue
+        # 使用 C-level 优化的列表推导式，避免 for loop 在 Python 字节码层面的执行开销
+        trajectories = [
+            {
+                "id": log.flight_id,
+                "path": json.loads(log.path_data),
+                "timestamps": json.loads(log.timestamps_data),
+            }
+            for log in logs if log.path_data and log.timestamps_data
+        ]
         if trajectories:
             return trajectories
 
@@ -57,8 +57,7 @@ def _load_city_trajectories(city: str):
     json_path = OUTPUT_BASE / f"{city}_uav_trajectories.json"
     if json_path.exists():
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            data = json.loads(json_path.read_text(encoding='utf-8'))
             # 静态 JSON 格式: { "trajectories": [...], ... }
             return data.get("trajectories", [])
         except Exception as e:
@@ -67,14 +66,14 @@ def _load_city_trajectories(city: str):
     return []
 
 
+@lru_cache(maxsize=32)
 def _load_city_energy(city: str):
     """加载指定城市的能耗数据（从 data/processed 目录）"""
     energy_file = DATA_DIR / "processed" / f"{city}_energy_predictions.json"
     if not energy_file.exists():
         return {}
     try:
-        with open(energy_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        return json.loads(energy_file.read_text(encoding='utf-8'))
     except Exception as e:
         logger.warning(f"读取能耗文件失败: {energy_file}, {e}")
         return {}
@@ -194,8 +193,7 @@ def analytics_overview():
     poi_file = DATA_DIR / "processed" / city / "poi_demand.geojson"
     if poi_file.exists():
         try:
-            with open(poi_file, 'r', encoding='utf-8') as f:
-                poi_data = json.load(f)
+            poi_data = json.loads(poi_file.read_text(encoding='utf-8'))
             poi_count = len(poi_data.get("features", []))
         except Exception:
             pass
@@ -262,8 +260,7 @@ def cities_comparison():
         poi_file = DATA_DIR / "processed" / city / "poi_demand.geojson"
         if poi_file.exists():
             try:
-                with open(poi_file, 'r', encoding='utf-8') as f:
-                    poi_data = json.load(f)
+                poi_data = json.loads(poi_file.read_text(encoding='utf-8'))
                 poi_count = len(poi_data.get("features", []))
             except Exception:
                 pass

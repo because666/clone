@@ -126,8 +126,7 @@ def main():
 
     if args.append and out_path.exists():
         # 追加模式：读旧文件，添加新轨迹
-        with open(out_path, "r", encoding="utf-8") as f:
-            existing = json.load(f)
+        existing = json.loads(out_path.read_text(encoding="utf-8"))
         existing["trajectories"].append({
             "id": result.flight_id,
             "path": result.path,
@@ -145,8 +144,7 @@ def main():
     else:
         data = build_output([result], args.city)
 
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"))
+    out_path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 
     elapsed = time.time() - t0
     logger.info(f"✅ 输出: {out_path}  (耗时 {elapsed:.2f}s)")

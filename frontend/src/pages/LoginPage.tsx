@@ -50,27 +50,27 @@ const LoginPage: React.FC = () => {
         {/* 覆盖文字内容 - 垂直居中作为视觉中心 */}
         <div className="relative z-10 flex flex-col justify-center items-start h-full p-16">
           <h1 className="text-5xl font-black text-white leading-tight tracking-tight"
-            style={{ textShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
+            style={SHADOW_1}>
             城市低空物流基建规划<br/>与运行监控可视化平台
           </h1>
           <div className="w-14 h-1 bg-white/50 rounded-full mt-7 mb-6" />
           <p className="text-white/70 text-base leading-relaxed max-w-lg"
-            style={{ textShadow: '0 1px 8px rgba(0,0,0,0.3)' }}>
+            style={SHADOW_2}>
             面向城市低空经济的多城市无人机航路规划、实时运行监控与能耗分析一体化平台。
           </p>
           <div className="flex items-center gap-10 mt-10">
             <div>
-              <div className="text-3xl font-black text-white" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>6</div>
+              <div className="text-3xl font-black text-white" style={SHADOW_3}>6</div>
               <div className="text-xs text-white/50 mt-1">覆盖城市</div>
             </div>
             <div className="w-px h-10 bg-white/20" />
             <div>
-              <div className="text-3xl font-black text-white" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>1000+</div>
+              <div className="text-3xl font-black text-white" style={SHADOW_3}>1000+</div>
               <div className="text-xs text-white/50 mt-1">仿真航线</div>
             </div>
             <div className="w-px h-10 bg-white/20" />
             <div>
-              <div className="text-3xl font-black text-white" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>A*</div>
+              <div className="text-3xl font-black text-white" style={SHADOW_3}>A*</div>
               <div className="text-xs text-white/50 mt-1">避障寻路</div>
             </div>
           </div>
