@@ -12,8 +12,7 @@
     <img src="https://img.shields.io/badge/渲染引擎-Deck.gl-FFF?logo=uber" alt="Deck.gl" />
     <img src="https://img.shields.io/badge/地图底座-Mapbox-000000?logo=mapbox&logoColor=white" alt="Mapbox" />
     <img src="https://img.shields.io/badge/后端调度-Flask-000000?logo=flask&logoColor=white" alt="Flask" />
-    <img src="https://img.shields.io/badge/存储-SQLite_持久化-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
-    <img src="https://img.shields.io/badge/算法-A*_避障-FF9800" alt="Algorithm" />
+    <img src="https://img.shields.io/badge/存储-SQLite-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
     <img src="https://img.shields.io/badge/License-MIT-blue" alt="License" />
   </p>
 
