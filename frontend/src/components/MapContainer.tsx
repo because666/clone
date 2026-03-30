@@ -33,6 +33,16 @@ import { ErrorAlert } from './ErrorAlert';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MapSkeleton } from './MapSkeleton';
 
+// 【性能优化 P5】静态 CSSOM 化：剥离 Render Tree 中的动态模板字符串，避免拖拽重绘时的样式表抖动
+const OVERLAY_CSS = `
+    .map-filter-active .maplibregl-canvas {
+        filter: invert(0.85) hue-rotate(180deg) brightness(0.9) contrast(1.4) !important;
+    }
+    .maplibregl-canvas {
+        transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+`;
+
 export default function MapContainer() {
     const {
         buildingsData,
@@ -125,7 +135,9 @@ export default function MapContainer() {
             const tasks = await fetchTasksApi('EXECUTING');
             setTrajectories(prev => {
                 const existingIds = new Set(prev.map((t: any) => t.id));
-                const newTrajs = [];
+                // 【性能优化 P4-A】建立活跃 ID 索引，用于剔除无效僵尸航班
+                const activeIds = new Set(tasks.map((t: any) => t.trajectory_data?.id).filter(Boolean));
+                const newTrajs: any[] = [];
                 for (const task of tasks) {
                     if (task.trajectory_data && task.trajectory_data.id) {
                         if (!existingIds.has(task.trajectory_data.id)) {
@@ -136,11 +148,15 @@ export default function MapContainer() {
                         }
                     }
                 }
-                if (newTrajs.length > 0) {
+                
+                // 【性能优化 P4-B】精准垃圾回收：剔除后端已完成的任务（失去连接状态），防止系统随时间运行产生内存溢出与渲染泄露
+                const aliveTrajs = prev.filter((t: any) => activeIds.has(t.id));
+                
+                if (newTrajs.length > 0 || aliveTrajs.length !== prev.length) {
                     // 【性能优化 P2-B】对 SSE 注入的新轨迹执行 SoA 预编译，
                     // 确保动画循环中走 Float32Array 快路径而非 AoS 慢路径
-                    precompileTrajectories(newTrajs);
-                    return [...prev, ...newTrajs];
+                    if (newTrajs.length > 0) precompileTrajectories(newTrajs);
+                    return [...aliveTrajs, ...newTrajs];
                 }
                 return prev;
             });
@@ -281,14 +297,7 @@ export default function MapContainer() {
                 style={{ background: '#f0f0f0' }}
                 onContextMenu={(e) => e.preventDefault()}
             >
-                <style>{`
-                    .map-filter-active .maplibregl-canvas {
-                        filter: invert(0.85) hue-rotate(180deg) brightness(0.9) contrast(1.4) !important;
-                    }
-                    .maplibregl-canvas {
-                        transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-                    }
-                `}</style>
+                <style>{OVERLAY_CSS}</style>
                 <DeckGL
                     ref={deckRef}
                     initialViewState={viewState}

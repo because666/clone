@@ -5,22 +5,13 @@
  * MapContainer 的角色从"超级组件"退化为纯粹的组装器/编排器。
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { GeoJsonLayer, ColumnLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import { ScenegraphLayer } from '@deck.gl/mesh-layers';
 import { uavPositionsBuffer, uavOrientationsBuffer, activeUAVTrajectories, activeUAVCount } from '../utils/animation';
 import { binarySearchTimestamp } from '../utils/physics';
 import type { VisionMode } from '../components/VisionModeDock';
-
-// 通过伪造 DeckGL 底层的 instancePickingColors 缓冲区，欺骗原生高亮着色器！
-// 给所有无人机强制分配 index=0 的专属点击色 [1, 0, 0]
-export const FAKE_PICKING_COLORS = new Uint8ClampedArray(4000 * 3);
-for (let i = 0; i < 4000 * 3; i += 3) {
-    FAKE_PICKING_COLORS[i] = 1;
-    FAKE_PICKING_COLORS[i + 1] = 0;
-    FAKE_PICKING_COLORS[i + 2] = 0;
-}
 
 interface UseMapLayersParams {
     buildingsData: any;
@@ -74,6 +65,26 @@ export function useMapLayers({
         poiSensitive?.features?.filter((f: any) => f.geometry.type === 'Point') || [],
         [poiSensitive]
     );
+
+    // ==================== [性能优化] 延时销毁发光图层 ====================
+    const [haloVisible, setHaloVisible] = useState(visionMode === 'uav');
+    useEffect(() => {
+        if (visionMode === 'uav') {
+            setHaloVisible(true);
+        } else {
+            const t = setTimeout(() => setHaloVisible(false), 600);
+            return () => clearTimeout(t);
+        }
+    }, [visionMode]);
+
+    // ==================== [性能优化] 动态扩容伪属性选色缓冲区 ====================
+    // 强制给所有无人机分配专属拾取色以达成统一的高亮效果，基于当前容量动态避免爆显存
+    const fakePickingColorsBuffer = useMemo(() => {
+        const safeCount = Math.max(4000, (trajectories?.length || 0) + 1000);
+        const buffer = new Uint8ClampedArray(safeCount * 3);
+        for (let i = 0; i < safeCount * 3; i += 3) buffer[i] = 1;
+        return buffer;
+    }, [trajectories?.length]);
 
     // ==================== 静态图层 ====================
 
@@ -208,7 +219,7 @@ export function useMapLayers({
             data: {
                 length: 0,
                 attributes: visionMode === 'uav' ? {
-                    instancePickingColors: { value: FAKE_PICKING_COLORS, size: 3 }
+                    instancePickingColors: { value: fakePickingColorsBuffer, size: 3 }
                 } : undefined
             },
             scenegraph: '/dji_spark.glb',
@@ -251,7 +262,7 @@ export function useMapLayers({
                 // 用于告诉 DeckGL 重置 buffer
             }
         });
-    }, [visionMode, setSelectedFlight, setHoverInfo, hoverInfoRef]);
+    }, [visionMode, setSelectedFlight, setHoverInfo, hoverInfoRef, fakePickingColorsBuffer]);
 
     const uavPointLayer = useMemo(() => {
         return new ScatterplotLayer({
@@ -450,7 +461,7 @@ export function useMapLayers({
             hoverPathLayer,
             radarSweepLayer,
             roiCenterModelLayer,
-            new ScatterplotLayer({
+            haloVisible ? new ScatterplotLayer({
                 id: 'uav-halo-glow-layer',
                 data: {
                     length: activeUAVCount,
@@ -468,13 +479,12 @@ export function useMapLayers({
                     radiusMinPixels: 600
                 },
                 updateTriggers: {
-                    getPosition: currentTimeRef.current,
                     getFillColor: visionMode,
                     getRadius: visionMode,
                     radiusMinPixels: visionMode
                 } as any
-            }),
-            new ScatterplotLayer({
+            }) : null,
+            haloVisible ? new ScatterplotLayer({
                 id: 'uav-halo-core-layer',
                 data: {
                     length: activeUAVCount,
@@ -492,20 +502,15 @@ export function useMapLayers({
                     radiusMinPixels: 400
                 },
                 updateTriggers: {
-                    getPosition: currentTimeRef.current,
                     getFillColor: visionMode,
                     getRadius: visionMode,
                     radiusMinPixels: visionMode
                 } as any
-            }),
+            }) : null,
             quantizedZoom >= 13 ? uavModelLayer.clone({
                 data: {
                     length: activeUAVCount,
-                    attributes: visionMode === 'uav' ? { instancePickingColors: { value: FAKE_PICKING_COLORS, size: 3 } } : undefined
-                } as any,
-                updateTriggers: {
-                    getPosition: currentTimeRef.current,
-                    getOrientation: currentTimeRef.current
+                    attributes: visionMode === 'uav' ? { instancePickingColors: { value: fakePickingColorsBuffer, size: 3 } } : undefined
                 } as any
             }) : uavPointLayer.clone({
                 data: {
@@ -515,7 +520,6 @@ export function useMapLayers({
                     }
                 },
                 updateTriggers: {
-                    getPosition: currentTimeRef.current,
                     getFillColor: visionMode
                 } as any
             }),
@@ -555,7 +559,7 @@ export function useMapLayers({
         ].filter(Boolean);
         return assembled;
     }, [staticLayers, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
-        roiCenterModelLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight]);
+        roiCenterModelLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer]);
 
     return { layers };
 }

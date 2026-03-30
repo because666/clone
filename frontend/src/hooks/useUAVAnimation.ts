@@ -148,7 +148,12 @@ export function useUAVAnimation(
         windSpeed,
         pushAlert
     });
-    animationStateRef.current = { isPlaying, speed: animationSpeed, energyData, windSpeed, pushAlert };
+    // 【性能优化 P6-A】按属性赋值而非构建新对象，消灭高频 React 生命周期带来的闭包对象开销与 V8 Heap GC 狂暴回收
+    animationStateRef.current.isPlaying = isPlaying;
+    animationStateRef.current.speed = animationSpeed;
+    animationStateRef.current.energyData = energyData;
+    animationStateRef.current.windSpeed = windSpeed;
+    animationStateRef.current.pushAlert = pushAlert;
 
     const animFrameRef = useRef<number>(0);
 
@@ -159,18 +164,18 @@ export function useUAVAnimation(
 
     // 【性能优化 OPT-5】建立空间哈希索引网格，消除暴力空间遍历
     const sensitivePointsRef = useRef<any[]>([]);
-    const sensitiveGridRef = useRef<Map<string, any[]>>(new Map());
+    const sensitiveGridRef = useRef<Map<number, any[]>>(new Map());
 
     useEffect(() => {
         if (poiSensitive?.features) {
             const points = poiSensitive.features.filter((f: any) => f.geometry?.type === 'Point');
             sensitivePointsRef.current = points;
 
-            // 构建约 500m (0.005度) 分桶的哈希网格
-            const grid = new Map<string, any[]>();
+            // 构建约 500m (0.005度) 分桶的哈希网格（【性能优化 P6-B】使用整数位移哈希替代高频 String 拼接 GC）
+            const grid = new Map<number, any[]>();
             for (const p of points) {
                 const [lon, lat] = p.geometry.coordinates;
-                const k = `${(lon / 0.005) | 0}_${(lat / 0.005) | 0}`;
+                const k = ((lon / 0.005) | 0) * 100000 + ((lat / 0.005) | 0);
                 if (!grid.has(k)) grid.set(k, []);
                 grid.get(k)!.push(p);
             }
@@ -224,6 +229,8 @@ export function useUAVAnimation(
         bar: HTMLElement | null,
         initialized: boolean
     }>({ active: null, cum: null, load: null, bar: null, initialized: false });
+    
+    const lastDashboardMetrics = useRef({ active: -1, cum: -1, load: -1 });
 
     const updateDashboardDOM = useCallback((time: number) => {
         const metricsLen = metricsRef.current.active.length;
@@ -238,8 +245,16 @@ export function useUAVAnimation(
         // 使用宏观物理空域承载力作为分母（避免用数据自身峰值当分母造成的假100%现象），设定 100 封顶
         const loadPct = Math.min(100, ((activeCount / CITY_AIRSPACE_CAPACITY) * 100 + 0.5) | 0);
 
-        // 懒初始化 DOM 缓存
         const cache = domCacheRef.current;
+        const last = lastDashboardMetrics.current;
+        
+        // 【性能优化 P6-C】如果底层数据没有变化，直接阻断后续查找与 DOM 指令写入（无论 JS 还是 DOM 都拒绝废操作）
+        if (cache.initialized && last.active === activeCount && last.cum === cumCount && last.load === loadPct) {
+            return;
+        }
+        lastDashboardMetrics.current = { active: activeCount, cum: cumCount, load: loadPct };
+
+        // 懒初始化 DOM 缓存
         if (!cache.initialized) {
             cache.active = document.getElementById('dashboard-active-drones');
             cache.cum = document.getElementById('dashboard-cumulative-flights');
@@ -302,7 +317,7 @@ export function useUAVAnimation(
                 // 只查找本单元与周边相邻的 8 个单元格子
                 for (let dx = -1; dx <= 1 && !foundAlert; dx++) {
                     for (let dy = -1; dy <= 1 && !foundAlert; dy++) {
-                        const localPoints = grid.get(`${gx + dx}_${gy + dy}`);
+                        const localPoints = grid.get((gx + dx) * 100000 + (gy + dy));
                         if (!localPoints) continue;
 
                         for (const poi of localPoints) {
@@ -411,7 +426,11 @@ export function useUAVAnimation(
                 progressBarRef.current.style.width = `${progress}%`;
             }
             if (progressTextRef.current) {
-                progressTextRef.current.textContent = formatElapsed(next);
+                const txt = formatElapsed(next);
+                // 【性能优化 P6-D】拦截无效的文本 DOM 写入，降低 Browser Paint 压力
+                if (progressTextRef.current.textContent !== txt) {
+                    progressTextRef.current.textContent = txt;
+                }
             }
             updateDashboardDOM(next);
         }
