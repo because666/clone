@@ -1,7 +1,7 @@
 import { useState, memo, type ReactNode } from 'react';
 import { 
   Activity, ShieldAlert, Zap, Wind, Sun, Cloud, CloudRain, 
-  CloudSnow, CloudLightning, BatteryWarning
+  CloudSnow, CloudLightning, BatteryWarning, AlertTriangle
 } from 'lucide-react';
 import { useEnvironment } from '../contexts/EnvironmentContext';
 import type { WeatherType } from '../contexts/EnvironmentContext';
@@ -147,6 +147,9 @@ const RightControlPanel = memo(function RightControlPanel() {
                              <div className="w-px h-2 bg-slate-300"></div>
                              <ShieldAlert size={10} className="text-amber-600" />
                              <span className="text-[9px] font-black text-amber-700">{totalCounts['danger-zone']}</span>
+                             <div className="w-px h-2 bg-slate-300"></div>
+                             <AlertTriangle size={10} className="text-orange-600" />
+                             <span className="text-[9px] font-black text-orange-700">{totalCounts['conflict']}</span>
                         </div>
                     </div>
 
@@ -163,11 +166,11 @@ const RightControlPanel = memo(function RightControlPanel() {
                                     className="relative bg-white/60 border border-white/80 rounded-xl p-3 group animate-[alertSlideIn_0.3s_ease-out]"
                                     style={{ animationDelay: `${idx * 0.05}s` }}
                                 >
-                                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${alert.type === 'low-battery' ? 'bg-rose-500' : 'bg-amber-500'}`}></div>
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${alert.type === 'low-battery' ? 'bg-rose-500' : alert.type === 'conflict' ? 'bg-orange-500' : 'bg-amber-500'}`}></div>
                                     <div className="flex justify-between items-start mb-1 pl-1">
                                         <div className="flex items-center gap-1.5">
-                                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm ${alert.type === 'low-battery' ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50'}`}>
-                                                {alert.type === 'low-battery' ? '电量警告' : '危险区域'}
+                                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm ${alert.type === 'low-battery' ? 'text-rose-700 bg-rose-50' : alert.type === 'conflict' ? 'text-orange-700 bg-orange-50' : 'text-amber-700 bg-amber-50'}`}>
+                                                {alert.type === 'low-battery' ? '电量警告' : alert.type === 'conflict' ? '空域冲突' : '危险区域'}
                                             </span>
                                         </div>
                                         <span className="text-[8px] text-slate-400 font-bold tabular-nums">

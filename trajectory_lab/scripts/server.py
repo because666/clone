@@ -39,6 +39,7 @@ from trajectory_lab.api.auth import auth_bp
 from trajectory_lab.api.trajectories import trajectories_bp, init_trajectories_bp
 from trajectory_lab.api.tasks import tasks_bp, init_tasks_bp
 from trajectory_lab.api.analysis import analysis_bp, init_analysis_bp
+from trajectory_lab.api.analytics import analytics_bp as analytics_data_bp, init_analytics_bp
 from trajectory_lab.api.ai import ai_bp
 
 logging.basicConfig(
@@ -85,12 +86,14 @@ def create_app() -> Flask:
     init_trajectories_bp(get_city_pois)
     init_tasks_bp(get_city_pois)
     init_analysis_bp(get_city_pois, _POI_CACHE)
+    init_analytics_bp(str(DATA_DIR), _POI_CACHE)
 
     # 注册蓝图
     app.register_blueprint(auth_bp)
     app.register_blueprint(trajectories_bp)
     app.register_blueprint(tasks_bp)
     app.register_blueprint(analysis_bp)
+    app.register_blueprint(analytics_data_bp)
     app.register_blueprint(ai_bp)
 
     # 【工程化改进 S8】标准化健康检查端点

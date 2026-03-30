@@ -146,3 +146,33 @@ export async function healthCheck(): Promise<ApiResponse<{
 }>> {
     return request('/api/health');
 }
+
+// ======================== Analytics API ========================
+
+/** 单城市聚合统计 */
+export async function fetchAnalyticsOverview(city: string): Promise<ApiResponse<{
+    city: string;
+    trajectoryCount: number;
+    avgDistance: number;
+    avgEnergy: number;
+    avgNodesExpanded: number;
+    avgPlanningTimeMs: number;
+    nfzViolationRate: number;
+    pathSmoothRate: number;
+    totalPlanned: number;
+    poiDensity: number;
+    endpoints: { lon: number; lat: number; type: string }[];
+}>> {
+    return request(`/api/analytics/overview?city=${city}`);
+}
+
+/** 跨城市对比数据 */
+export async function fetchCitiesComparison(): Promise<ApiResponse<{
+    city: string;
+    trajectoryCount: number;
+    avgDistance: number;
+    avgEnergy: number;
+    poiDensity: number;
+}[]>> {
+    return request('/api/analytics/cities-comparison');
+}

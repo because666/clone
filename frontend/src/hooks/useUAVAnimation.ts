@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
-import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, uavActiveIndicesBuffer } from '../utils/animation';
+import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, uavActiveIndicesBuffer, conflictPairsBuffer, setConflictPairCount } from '../utils/animation';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 import AnimationWorker from '../workers/animation.worker?worker';
 
@@ -91,7 +91,7 @@ export function useUAVAnimation(
     energyData?: any,
     poiSensitive?: any,
     windSpeed?: number,
-    pushAlert?: (type: 'low-battery' | 'danger-zone', flightId: string, message: string) => void,
+    pushAlert?: (type: 'low-battery' | 'danger-zone' | 'conflict', flightId: string, message: string) => void,
     trackingStateRef?: React.MutableRefObject<{ isTracking: boolean, lockedFlight: any | null }>
 ) {
     const trajectoriesRef = useRef<UAVPath[]>([]);
@@ -342,6 +342,80 @@ export function useUAVAnimation(
                     }
                 }
             }
+        }
+
+        // ③ 【4D 时空冲突检测】UAV 间邻域碰撞检测
+        // 使用 0.002° (~200m) 空间哈希网格，在同 bin 和邻 bin 内做两两距离检测
+        // 同样使用时间切片：每帧只在 binIndex === 0 时执行一次全量扫描（约每秒一次）
+        if (binIndex === 0 && activeUAVCount > 1) {
+            const CONFLICT_GRID_SIZE = 0.002; // ~200m 网格粒度
+            const CONFLICT_WARN_DIST_SQ = 200 * 200;  // 200m 黄色近距警告
+            const CONFLICT_DANGER_DIST_SQ = 80 * 80;   // 80m 红色碰撞风险
+            const CONFLICT_ALT_THRESHOLD = 30;          // 高度差阈值（米）
+
+            // 构建当前帧 UAV 位置的临时空间哈希（帧内构建帧内丢弃，无跨帧状态）
+            const uavGrid = new Map<number, number[]>();
+            for (let u = 0; u < activeUAVCount; u++) {
+                const gx = (uavPositionsBuffer[u * 3] / CONFLICT_GRID_SIZE) | 0;
+                const gy = (uavPositionsBuffer[u * 3 + 1] / CONFLICT_GRID_SIZE) | 0;
+                const key = gx * 100000 + gy;
+                if (!uavGrid.has(key)) uavGrid.set(key, []);
+                uavGrid.get(key)!.push(u);
+            }
+
+            let pairCount = 0;
+            const maxPairs = 200;
+            const checked = new Set<number>(); // 避免重复检测同一对
+
+            for (const [_key, indices] of uavGrid) {
+                if (pairCount >= maxPairs) break;
+                // 同 bin 内两两检测
+                for (let a = 0; a < indices.length && pairCount < maxPairs; a++) {
+                    const ai = indices[a];
+                    const ax = uavPositionsBuffer[ai * 3];
+                    const ay = uavPositionsBuffer[ai * 3 + 1];
+                    const az = uavPositionsBuffer[ai * 3 + 2];
+
+                    for (let b = a + 1; b < indices.length && pairCount < maxPairs; b++) {
+                        const bi = indices[b];
+                        const pairKey = ai < bi ? ai * 100000 + bi : bi * 100000 + ai;
+                        if (checked.has(pairKey)) continue;
+                        checked.add(pairKey);
+
+                        const bz = uavPositionsBuffer[bi * 3 + 2];
+                        const altDiff = Math.abs(az - bz);
+                        if (altDiff > CONFLICT_ALT_THRESHOLD) continue;
+
+                        const bx = uavPositionsBuffer[bi * 3];
+                        const by = uavPositionsBuffer[bi * 3 + 1];
+                        const distSq = fastDistSq(ax, ay, bx, by);
+
+                        if (distSq < CONFLICT_WARN_DIST_SQ) {
+                            // 写入冲突弧线缓冲区
+                            conflictPairsBuffer[pairCount * 6 + 0] = ax;
+                            conflictPairsBuffer[pairCount * 6 + 1] = ay;
+                            conflictPairsBuffer[pairCount * 6 + 2] = az;
+                            conflictPairsBuffer[pairCount * 6 + 3] = bx;
+                            conflictPairsBuffer[pairCount * 6 + 4] = by;
+                            conflictPairsBuffer[pairCount * 6 + 5] = bz;
+                            pairCount++;
+
+                            // 只有达到危险距离才推送告警通知
+                            if (distSq < CONFLICT_DANGER_DIST_SQ) {
+                                const idA = activeUAVTrajectories[ai]?.id || `UAV-${ai}`;
+                                const idB = activeUAVTrajectories[bi]?.id || `UAV-${bi}`;
+                                const dist = Math.sqrt(distSq);
+                                currentPushAlert(
+                                    'conflict',
+                                    `${idA}_${idB}`,
+                                    `空域冲突！${idA} 与 ${idB} 水平距离仅 ${Math.round(dist)}m，高度差 ${Math.round(altDiff)}m，存在碰撞风险！`
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            setConflictPairCount(pairCount);
         }
     }, []); // 稳定回调：所有外部依赖已通过 ref 读取
 

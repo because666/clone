@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { Activity, Package, Navigation, BarChart3, ListChecks, Target, Wind, Cloud, CloudRain, CloudSnow, CloudLightning, Thermometer, Sun } from 'lucide-react';
+import { Activity, Package, Navigation, BarChart3, ListChecks, Target, Wind, Cloud, CloudRain, CloudSnow, CloudLightning, Thermometer, Sun, PieChart } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import RightControlPanel from './RightControlPanel';
 import { CITY_CONTROL_CENTER_MAP } from '../constants/map';
 import { useEnvironment } from '../contexts/EnvironmentContext';
@@ -111,6 +112,7 @@ const EnvironmentMonitor = memo(function EnvironmentMonitor() {
     );
 });// 【性能优化 P2-F】memo 包裹 EnvironmentMonitor，配合 P0-B Context value 稳定化
 const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpenTasks, onToggleSandbox, isSandboxMode, currentCity = 'shenzhen' }: Props) {
+    const navigate = useNavigate();
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-10 p-6 font-sans">
             <RightControlPanel />
@@ -151,6 +153,17 @@ const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpe
                     <Target size={20} className={`relative z-10 ${isSandboxMode ? 'text-white' : 'text-indigo-700'}`} />
                     <span className={`text-base font-black tracking-tight relative z-10 ${isSandboxMode ? 'text-white' : 'text-slate-800'}`}>
                         基建 ROI 沙盘
+                    </span>
+                </button>
+                {/* 数据分析页入口 */}
+                <button
+                    onClick={() => navigate('/analytics')}
+                    className="flex items-center justify-center gap-3 px-6 py-3 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] group overflow-hidden relative"
+                >
+                    <div className="absolute inset-0 bg-gradient-to-br from-violet-900/5 to-transparent pointer-events-none"></div>
+                    <PieChart size={20} className="text-violet-700 relative z-10" />
+                    <span className="text-base font-black tracking-tight text-slate-800 relative z-10">
+                        数据深度分析
                     </span>
                 </button>
             </div>

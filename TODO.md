@@ -6,14 +6,14 @@
 ## Backlog
 后端：引入 PostgreSQL + PostGIS 空间数据库，实现航线任务 CRUD 持久化
 算法/AI：训练航线能耗预测模型（线性回归/随机森林），提供 AI 预审功能
-前端：独立 `/analytics` 数据分析页（起降点热力图、告警统计趋势、跨城市对比）
-算法：多无人机 4D 航路冲突检测与可视化（时间+空间碰撞预判）
 后端：无人机档案注册管理接口 + 前端管理界面
 [应飞扬] 测试：pytest 覆盖后端 API + 前端 useSandbox/useFlightPicking Hook 测试
 
 ## In Progress
 
 ##  Done
+[应飞扬] 全栈：落地独立全屏数据分析页 `/analytics`（6 大可视化模块 + 后端聚合统计 API + 跨城市雷达对比 + 告警饼图 + 算法性能面板），实现 Dashboard ↔ Analytics 双页导航体系
+[应飞扬] 算法/前端：实现 4D 时空冲突检测引擎——基于空间哈希 O(N) 邻域碰撞检测 + 时间切片分帧均摊 + ArcLayer 实时冲突弧线渲染 + 三级告警（conflict/danger-zone/low-battery）统一推送
 [应飞扬] 算法/工程：上线 Qwen 大模型 AI 航线安全预审中枢（基于 Shapely 实现 3D 禁飞区雷达穿透拦截），并封装桌面级 Qwen 悬浮晶核拟态交互组件
 [应飞扬] 前端：研发并落地 Cyberpunk Vision Mode 多视图视觉系统，实现无人机 3D 模型深度着色器混叠高亮与无缝丝滑 GPU 过渡动画
 [应飞扬] 工程：深度性能优化 12 项（Context 稳定化、粒子系统 ref 驱动、layers memo、SSE 轨迹预编译、组件 memo 化、内存泄漏修复、雷达动画优化、cloneLayers 哈希查找、Vite 构建优化）+ 工程化改进 7 项（统一 API Service 层、TypeScript 类型安全、后端响应格式统一、脚本文档、.env.example、Dockerfile 修复、/api/health 端点）

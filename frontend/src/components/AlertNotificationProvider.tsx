@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useCallback, useRef, type ReactNod
 /** 单条告警 */
 export interface AlertItem {
     id: string;
-    type: 'low-battery' | 'danger-zone';
+    type: 'low-battery' | 'danger-zone' | 'conflict';
     flightId: string;
     message: string;
     timestamp: number;       // Date.now()
@@ -14,13 +14,14 @@ interface AlertContextType {
     totalCounts: {
         'low-battery': number;
         'danger-zone': number;
+        'conflict': number;
     };
     pushAlert: (type: AlertItem['type'], flightId: string, message: string) => void;
 }
 
 const AlertContext = createContext<AlertContextType>({
     alerts: [],
-    totalCounts: { 'low-battery': 0, 'danger-zone': 0 },
+    totalCounts: { 'low-battery': 0, 'danger-zone': 0, 'conflict': 0 },
     pushAlert: () => {},
 });
 
@@ -32,7 +33,7 @@ const COOLDOWN_CLEANUP_INTERVAL = 50; // 每 50 次推送清理一次过期冷�
 /** 告警推送 Provider */
 export function AlertNotificationProvider({ children }: { children: ReactNode }) {
     const [alerts, setAlerts] = useState<AlertItem[]>([]);
-    const [totalCounts, setTotalCounts] = useState({ 'low-battery': 0, 'danger-zone': 0 });
+    const [totalCounts, setTotalCounts] = useState({ 'low-battery': 0, 'danger-zone': 0, 'conflict': 0 });
     
     // 冷却表：{ [flightId-type]: lastPushTime }
     const cooldownRef = useRef<Map<string, number>>(new Map());

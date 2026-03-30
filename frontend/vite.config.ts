@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => ({
         target: 'http://127.0.0.1:5001',
         changeOrigin: true,
       },
+      // 代理 data 静态目录到后端
+      '/data': {
+        target: 'http://127.0.0.1:5001',
+        changeOrigin: true,
+      },
     },
   },
   esbuild: {

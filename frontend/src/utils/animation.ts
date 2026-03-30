@@ -32,6 +32,15 @@ export function setActiveUAVCount(count: number) {
     activeUAVCount = count;
 }
 
+// ======================== 4D 时空冲突检测缓冲区 ========================
+// 存储冲突 UAV 对的起终点 3D 坐标，供 ArcLayer 实时渲染红色冲突弧线
+const MAX_CONFLICT_PAIRS = 200;
+export const conflictPairsBuffer = new Float32Array(MAX_CONFLICT_PAIRS * 6); // [srcLon, srcLat, srcAlt, dstLon, dstLat, dstAlt] × N
+export let conflictPairCount = 0;
+export function setConflictPairCount(count: number) {
+    conflictPairCount = count;
+}
+
 // 预计算常量，消除热路径中的除法运算
 const RAD2DEG = 180 / Math.PI;
 // 查表法：预生成 00-99 的两位数字符串，消除 padStart 的每帧字符串分配
