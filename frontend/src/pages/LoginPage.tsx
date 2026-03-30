@@ -26,10 +26,10 @@ const LoginPage: React.FC = () => {
     setError('');
     try {
       const { data } = await api.post('/auth/login', { username, password });
-      login(data.token, data.user);
+      login(data.data.token, data.data.user);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.error || '登录失败，请检查后端服务是否启动');
+      setError(err.response?.data?.message || '登录失败，请检查后端服务是否启动');
       setIsLoading(false);
     }
   };
