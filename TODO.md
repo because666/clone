@@ -14,6 +14,7 @@
 ## In Progress
 
 ##  Done
+[应飞扬] 前端：研发并落地 Cyberpunk Vision Mode 多视图视觉系统，实现无人机 3D 模型深度着色器混叠高亮与无缝丝滑 GPU 过渡动画
 [应飞扬] 工程：深度性能优化 12 项（Context 稳定化、粒子系统 ref 驱动、layers memo、SSE 轨迹预编译、组件 memo 化、内存泄漏修复、雷达动画优化、cloneLayers 哈希查找、Vite 构建优化）+ 工程化改进 7 项（统一 API Service 层、TypeScript 类型安全、后端响应格式统一、脚本文档、.env.example、Dockerfile 修复、/api/health 端点）
 [应飞扬] 工程：全栈架构重构——后端 Blueprint 模块化拆分（server.py 770→110行）、统一 API 响应格式 {code,data,message}、前端 Hook 提取（useSandbox/useFlightPicking）、Context 合并、死代码清理（~420行）
 [应飞扬] 全栈：研发基于空间计算的"基建 ROI 沙盘 DSS 辅助决策引擎"（含 A/B 方案博弈、投资财务闭环与 3D 雷达激波渲染）

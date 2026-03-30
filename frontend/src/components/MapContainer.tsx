@@ -12,6 +12,7 @@ import type { UAVPath } from '../types/map';
 import { useUAVAnimation } from '../hooks/useUAVAnimation';
 import { useSSESubscription } from '../hooks/useSSESubscription';
 import { useMapLayers } from '../hooks/useMapLayers';
+import type { VisionMode } from './VisionModeDock';
 import { useSandbox } from '../hooks/useSandbox';
 import { useFlightPicking } from '../hooks/useFlightPicking';
 import { useEnvironment } from '../contexts/EnvironmentContext';
@@ -52,6 +53,7 @@ export default function MapContainer() {
     const [selectedFlight, setSelectedFlight] = useState<any>(null);
     const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
     const [isTasksOpen, setIsTasksOpen] = useState(false);
+    const [visionMode, setVisionMode] = useState<VisionMode>('default');
     const [toastState, setToastState] = useState<{ msg: string, type: 'info' | 'success' | 'error' | 'loading' } | null>(null);
 
     const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' | 'loading' = 'info') => {
@@ -259,6 +261,7 @@ export default function MapContainer() {
         setSelectedFlight,
         setHoverInfo,
         handleDemandPick,
+        visionMode,
     });
 
     const handleRetryLoad = useCallback(() => {
@@ -274,10 +277,18 @@ export default function MapContainer() {
             onRetry={() => loadCityData(currentCity, () => setSelectedFlight(null))}
         >
             <div
-                className="absolute inset-0 z-0"
+                className={`absolute inset-0 z-0 ${visionMode !== 'default' ? 'map-filter-active' : ''}`}
                 style={{ background: '#f0f0f0' }}
                 onContextMenu={(e) => e.preventDefault()}
             >
+                <style>{`
+                    .map-filter-active .maplibregl-canvas {
+                        filter: invert(0.85) hue-rotate(180deg) brightness(0.9) contrast(1.4) !important;
+                    }
+                    .maplibregl-canvas {
+                        transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+                    }
+                `}</style>
                 <DeckGL
                     ref={deckRef}
                     initialViewState={viewState}
@@ -419,6 +430,8 @@ export default function MapContainer() {
                     handleCityJump={handleCityJump}
                     isDropdownOpen={isDropdownOpen}
                     setIsDropdownOpen={setIsDropdownOpen}
+                    visionMode={visionMode}
+                    setVisionMode={setVisionMode}
                 />
 
                 <WeatherOverlay />

@@ -46,20 +46,27 @@ function fastDistSq(lon1: number, lat1: number, lon2: number, lat2: number): num
  */
 type LayerCloner = (layer: any, currentTime: number) => any;
 
-const LAYER_CLONERS = new Map<string, LayerCloner>([
-    ['uav-active-tail-layer', (layer, currentTime) => layer.clone({ currentTime })],
-    ['selected-uav-layer', (layer, currentTime) => layer.clone({ updateTriggers: { getPosition: currentTime } })],
-    ['uav-model-layer', (layer, currentTime) => layer.clone({
-        data: { length: activeUAVCount },
-        updateTriggers: { getPosition: currentTime, getOrientation: currentTime }
-    })],
-    ['uav-point-layer', (layer, currentTime) => layer.clone({
+const pointLayerCloner: LayerCloner = (layer, currentTime) => {
+    const existing = layer.props.updateTriggers || {};
+    return layer.clone({
         data: {
             length: activeUAVCount,
             attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
         },
-        updateTriggers: { getPosition: currentTime }
+        updateTriggers: { ...existing, getPosition: currentTime }
+    });
+};
+
+const LAYER_CLONERS = new Map<string, LayerCloner>([
+    ['uav-active-tail-layer', (layer, currentTime) => layer.clone({ currentTime })],
+    ['selected-uav-layer', (layer, currentTime) => layer.clone({ updateTriggers: { ...(layer.props.updateTriggers || {}), getPosition: currentTime } })],
+    ['uav-model-layer', (layer, currentTime) => layer.clone({
+        data: { length: activeUAVCount, attributes: layer.props.data?.attributes },
+        updateTriggers: { ...(layer.props.updateTriggers || {}), getPosition: currentTime, getOrientation: currentTime }
     })],
+    ['uav-point-layer', pointLayerCloner],
+    ['uav-halo-glow-layer', pointLayerCloner],
+    ['uav-halo-core-layer', pointLayerCloner],
 ]);
 
 function cloneLayers(deck: any, currentTime: number): any[] {

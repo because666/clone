@@ -1,4 +1,6 @@
 import { memo } from 'react';
+import { Eye, Plane, Building2, ShieldAlert } from 'lucide-react';
+import type { VisionMode } from './VisionModeDock';
 import { CITIES } from '../constants/map';
 
 interface PlaybackControlsProps {
@@ -10,6 +12,8 @@ interface PlaybackControlsProps {
     handleCityJump: (cityId: string) => void;
     isDropdownOpen: boolean;
     setIsDropdownOpen: (val: boolean) => void;
+    visionMode: VisionMode;
+    setVisionMode: (val: VisionMode) => void;
 }
 
 const PlaybackControls = memo(function PlaybackControls({
@@ -21,6 +25,8 @@ const PlaybackControls = memo(function PlaybackControls({
     handleCityJump,
     isDropdownOpen,
     setIsDropdownOpen,
+    visionMode,
+    setVisionMode,
 }: PlaybackControlsProps) {
     return (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
@@ -58,7 +64,7 @@ const PlaybackControls = memo(function PlaybackControls({
                     ))}
                 </div>
 
-                <div className="flex items-center ml-2 relative z-50">
+                <div className="flex items-center relative z-50 shrink-0">
                     <div className="relative group">
                         <button
                             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -97,6 +103,35 @@ const PlaybackControls = memo(function PlaybackControls({
                             </>
                         )}
                     </div>
+                </div>
+
+                <div className="w-[1px] h-8 bg-slate-400/30 relative z-10 shrink-0"></div>
+
+                <div className="flex items-center gap-2 relative z-10 shrink-0">
+                    {[
+                        { id: 'default', icon: Eye, label: '常规' },
+                        { id: 'uav', icon: Plane, label: '航班' },
+                        { id: 'building', icon: Building2, label: '基建' },
+                        { id: 'nofly', icon: ShieldAlert, label: '禁航' },
+                    ].map(mode => {
+                        const isActive = visionMode === mode.id;
+                        const Icon = mode.icon;
+                        return (
+                            <button
+                                key={mode.id}
+                                onClick={() => setVisionMode(mode.id as VisionMode)}
+                                className={`flex flex-row items-center whitespace-nowrap gap-1.5 px-4 py-2 rounded-full transition-all duration-300 font-bold text-sm ${
+                                    isActive 
+                                        ? 'bg-slate-700 text-white shadow-md border-transparent' 
+                                        : 'bg-white/50 text-slate-600 hover:bg-white/80 hover:text-slate-900 border border-white/40'
+                                }`}
+                                title={mode.label}
+                            >
+                                <Icon size={16} />
+                                <span>{mode.label}</span>
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
         </div>
