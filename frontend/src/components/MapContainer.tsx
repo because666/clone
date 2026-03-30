@@ -21,6 +21,8 @@ import PlaybackControls from './PlaybackControls';
 import HoverTooltip from './HoverTooltip';
 import FlightDetailPanel from './FlightDetailPanel';
 import WeatherOverlay from './WeatherOverlay';
+import AiPreflightModal from './AiPreflightModal';
+import AiMascot from './AiMascot';
 // 【性能优化】ECharts 延迟加载：统计面板默认隐藏，ECharts ~800KB 不再阻塞首屏
 const AnalyticsPanel = lazy(() => import('./AnalyticsPanel'));
 // 【性能优化】TaskManagementPanel ~30KB 最大组件，默认隐藏，延迟加载减少首屏 bundle
@@ -83,7 +85,7 @@ export default function MapContainer() {
     } = useSandbox({ currentCity });
 
     // 【架构优化 P3-2】航线选点逻辑提取到独立 Hook
-    const { pickedFromDisplay, handleDemandPick } = useFlightPicking({
+    const { pickedFromDisplay, handleDemandPick, pendingAiTask, confirmCreateTask, cancelPendingTask } = useFlightPicking({
         currentCity, isSandboxMode, showToast
     });
 
@@ -383,6 +385,16 @@ export default function MapContainer() {
                     )}
                 </Suspense>
 
+                <AiPreflightModal
+                    isOpen={!!pendingAiTask}
+                    fromPoint={pendingAiTask?.fromPoint || null}
+                    toPoint={pendingAiTask?.toPoint || null}
+                    city={currentCity}
+                    weather={{ desc: "多云", windSpeed: windSpeed }}
+                    onClose={cancelPendingTask}
+                    onConfirm={confirmCreateTask}
+                />
+
                 {/* 骨架屏 - 在数据加载完成前显示 */}
                 {isLoadingCity && (
                     <MapSkeleton loadingSteps={loadingSteps} />
@@ -444,6 +456,7 @@ export default function MapContainer() {
                 />
 
                 <WeatherOverlay />
+                <AiMascot />
             </div>
         </ErrorBoundary>
     );

@@ -39,6 +39,7 @@ from trajectory_lab.api.auth import auth_bp
 from trajectory_lab.api.trajectories import trajectories_bp, init_trajectories_bp
 from trajectory_lab.api.tasks import tasks_bp, init_tasks_bp
 from trajectory_lab.api.analysis import analysis_bp, init_analysis_bp
+from trajectory_lab.api.ai import ai_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,6 +91,7 @@ def create_app() -> Flask:
     app.register_blueprint(trajectories_bp)
     app.register_blueprint(tasks_bp)
     app.register_blueprint(analysis_bp)
+    app.register_blueprint(ai_bp)
 
     # 【工程化改进 S8】标准化健康检查端点
     _start_time = time.time()

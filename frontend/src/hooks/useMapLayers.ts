@@ -459,7 +459,8 @@ export function useMapLayers({
             uavFullTrajectoryLayer,
             activeTailLayer,
             hoverPathLayer,
-            radarSweepLayer,
+            roiRadiusLayer,     // 重新加上沙盘的静态探测圈图层
+            radarSweepLayer,    // 添加沙盘动态激波扩散层
             roiCenterModelLayer,
             haloVisible ? new ScatterplotLayer({
                 id: 'uav-halo-glow-layer',
@@ -558,8 +559,8 @@ export function useMapLayers({
             }) : null
         ].filter(Boolean);
         return assembled;
-    }, [staticLayers, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
-        roiCenterModelLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer]);
+    }, [staticLayers, uavFullTrajectoryLayer, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
+        roiCenterModelLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer, visionMode]);
 
     return { layers };
 }
