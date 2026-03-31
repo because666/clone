@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "perf:scan": "node ../tools/perf_radar.js"
+    "perf:scan": "node ../tools/perf_radar.js",
+    "postinstall": "node scripts/patch-luma.js"
   },
   "dependencies": {
     "@deck.gl/geo-layers": "^9.2.9",
