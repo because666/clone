@@ -41,15 +41,15 @@ export default defineConfig(({ mode }) => ({
         // 核心：基于包特性的手动分包策略 (Manual Chunks)
         manualChunks: (id) => {
           // React 及其生态包，这类包更新低频且多页通用
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router')) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/react-router/') || id.includes('node_modules/react-router-dom/')) {
             return 'react-vendor';
           }
           // 地理底层引擎引擎及相关包装器（体积巨大，往往数 Mb）
-          if (id.includes('node_modules/deck.gl') || id.includes('node_modules/@deck.gl') || id.includes('node_modules/maplibre-gl') || id.includes('node_modules/react-map-gl')) {
+          if (id.includes('node_modules/deck.gl/') || id.includes('node_modules/@deck.gl/') || id.includes('node_modules/maplibre-gl/') || id.includes('node_modules/react-map-gl/')) {
             return 'map-vendor';
           }
           // 图表渲染引擎包
-          if (id.includes('node_modules/echarts') || id.includes('node_modules/zrender')) {
+          if (id.includes('node_modules/echarts/') || id.includes('node_modules/zrender/')) {
             return 'chart-vendor';
           }
           // D3 计算模块和其余所有的第三方轮子
