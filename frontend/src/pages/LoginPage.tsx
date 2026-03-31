@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../utils/api';
 
+// 文字阴影样式常量，增强毛玻璃背景上的可读性
+const SHADOW_1: React.CSSProperties = { textShadow: '0 2px 12px rgba(0,0,0,0.5)' };
+const SHADOW_2: React.CSSProperties = { textShadow: '0 1px 8px rgba(0,0,0,0.4)' };
+const SHADOW_3: React.CSSProperties = { textShadow: '0 1px 6px rgba(0,0,0,0.35)' };
+
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

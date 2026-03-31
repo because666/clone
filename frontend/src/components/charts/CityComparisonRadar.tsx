@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
-const CHART_STYLE = { height: '240px', width: '100%' };
 const CHART_STYLE_LG = { height: '320px', width: '100%' };
 import { CITIES } from '../../constants/map';
 
