@@ -18,6 +18,7 @@ import type { UAVPath } from '../types/map';
 import { useUAVAnimation } from '../hooks/useUAVAnimation';
 import { useSSESubscription } from '../hooks/useSSESubscription';
 import { useMapLayers } from '../hooks/useMapLayers';
+import { useAStarAnimation } from '../hooks/useAStarAnimation';
 import type { VisionMode } from './VisionModeDock';
 import { useSandbox } from '../hooks/useSandbox';
 import { useFlightPicking } from '../hooks/useFlightPicking';
@@ -138,6 +139,13 @@ export default function MapContainer() {
         setAnimationSpeed,
     } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert, trackingStateRef);
 
+    // 【算法可视化】为被选中的航班生成 A* 搜索波纹扩散的时钟索引
+    const aStarProgressIndex = useAStarAnimation(
+        selectedFlight?.explored_nodes,
+        selectedFlight !== null, // 选中且有航路时激活动画
+        2500 // 完整激波扩散耗时 (ms)
+    );
+
     useEffect(() => {
         loadCityData("shenzhen", () => setSelectedFlight(null));
     }, [loadCityData]);
@@ -155,19 +163,21 @@ export default function MapContainer() {
                 for (const task of tasks) {
                     if (task.trajectory_data && task.trajectory_data.id) {
                         if (!existingIds.has(task.trajectory_data.id)) {
-                            const newTraj = { ...task.trajectory_data };
-                            const offset = currentTimeRef.current;
-                            newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
-                            newTrajs.push(newTraj);
+                                // 打上防误伤标记，以向系统申明它是受控单体，并在后端的生命周期中受审和回收
+                                const newTraj = { ...task.trajectory_data, fromTaskSystem: true };
+                                const offset = currentTimeRef.current;
+                                newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
+                                newTrajs.push(newTraj);
+                            }
                         }
                     }
-                }
 
-                // 【性能优化 P4-B】精准垃圾回收：剔除后端已完成的任务（失去连接状态），防止系统随时间运行产生内存溢出与渲染泄露
-                const aliveTrajs = prev.filter((t: any) => activeIds.has(t.id));
+                    // 【性能优化 P4-B】精准垃圾回收：剔除后端已完成的任务（失去连接状态），防止系统随时间运行产生内存溢出与渲染泄露
+                    // 核心修复点：只对派发系统(fromTaskSystem)的任务挥动屠刀，底层仿真基座的初始静态飞行物必须被保护
+                    const aliveTrajs = prev.filter((t: any) => !t.fromTaskSystem || activeIds.has(t.id));
 
-                if (newTrajs.length > 0 || aliveTrajs.length !== prev.length) {
-                    // 【性能优化 P2-B】对 SSE 注入的新轨迹执行 SoA 预编译，
+                    if (newTrajs.length > 0 || aliveTrajs.length !== prev.length) {
+                        // 【性能优化 P2-B】对 SSE 注入的新轨迹执行 SoA 预编译，
                     // 确保动画循环中走 Float32Array 快路径而非 AoS 慢路径
                     if (newTrajs.length > 0) precompileTrajectories(newTrajs);
                     return [...aliveTrajs, ...newTrajs];
@@ -292,6 +302,7 @@ export default function MapContainer() {
         setHoverInfo,
         handleDemandPick,
         visionMode,
+        aStarProgressIndex,
     });
 
     const handleRetryLoad = useCallback(() => {

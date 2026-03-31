@@ -33,6 +33,7 @@ interface UseMapLayersParams {
     setHoverInfo: (info: any) => void;
     handleDemandPick: (info: any) => void;
     visionMode: VisionMode;
+    aStarProgressIndex?: number;
 }
 
 /**
@@ -59,6 +60,7 @@ export function useMapLayers({
     setHoverInfo,
     handleDemandPick,
     visionMode,
+    aStarProgressIndex = 0,
 }: UseMapLayersParams) {
 
     const sensitivePoints = useMemo(() =>
@@ -450,6 +452,43 @@ export function useMapLayers({
         });
     }, [radarSweepActive, radarSweepRadius, sandboxCenters]);
 
+    // ==================== [赛事核心] A* 探索波浪渲染图层 ====================
+    const aStarExplorationLayer = useMemo(() => {
+        if (!selectedFlight || !selectedFlight.explored_nodes) return null;
+        
+        // 【视觉优化】激波效果：绝不保留所有历史节点避免大面积光污染密集堆叠
+        // 只截取冲在最前面的扫描前沿(波动尾迹)
+        const tailLength = 200; 
+        const startIndex = Math.max(0, aStarProgressIndex - tailLength);
+        const visibleNodes = selectedFlight.explored_nodes.slice(startIndex, Math.max(0, aStarProgressIndex));
+
+        return new ScatterplotLayer({
+            id: 'astar-exploration-layer',
+            data: visibleNodes,
+            getPosition: (d: any) => [d[1], d[0]], // [lon, lat] 纠偏 
+            getRadius: 35, // 使用真实物理半径（米），由于网格约 50 米，设为 35 米可形成点阵感
+            radiusMinPixels: 1,
+            radiusMaxPixels: 6, // 避免缩小地图时满屏大光斑
+            // 采用基于索引的新老节点衰减效果
+            getFillColor: (_: any, { index }: any) => {
+                const total = visibleNodes.length;
+                // 计算该节点离"探测前沿"有多远，越接近前沿的(index趋近total)越白/越亮
+                const ratio = Math.max(0, index / total); 
+                return [
+                    Math.floor(20 + 235 * ratio * ratio), // R (变白)
+                    Math.floor(255 * ratio),              // G (荧光绿)
+                    Math.floor(100 + 155 * ratio),        // B (偏蓝)
+                    Math.floor(200 * ratio)               // A (只让最靠近前锋的点显形)
+                ];
+            },
+            parameters: { depthTest: false, blend: true, blendEquation: 32774 },
+            pickable: false,
+            updateTriggers: {
+                getFillColor: [visibleNodes.length], // 当节点数发生变化时强制重绘着色
+            }
+        });
+    }, [selectedFlight, aStarProgressIndex]);
+
     // ==================== 最终组装 ====================
     // 【性能优化 P0-A】用 useMemo 包裹最终 layers 数组的组装，
     // 消除 MapContainer 每次 re-render 时的数组重建与 filter(Boolean) 的 GC 脉冲
@@ -462,6 +501,7 @@ export function useMapLayers({
             roiRadiusLayer,     // 重新加上沙盘的静态探测圈图层
             radarSweepLayer,    // 添加沙盘动态激波扩散层
             roiCenterModelLayer,
+            aStarExplorationLayer,
             // ============ 4D 冲突检测弧线层 ============
             new ArcLayer({
                 id: 'conflict-arc-layer',
@@ -581,7 +621,7 @@ export function useMapLayers({
         ].filter(Boolean);
         return assembled;
     }, [staticLayers, uavFullTrajectoryLayer, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
-        roiCenterModelLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer, visionMode]);
+        roiCenterModelLayer, aStarExplorationLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer, visionMode]);
 
     return { layers };
 }

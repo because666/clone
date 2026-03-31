@@ -77,7 +77,7 @@ export interface TaskItem {
     start_poi_id: string;
     end_poi_id: string;
     status: 'PENDING' | 'APPROVED' | 'EXECUTING' | 'COMPLETED' | 'REJECTED';
-    trajectory_data: { id: string; path: [number, number, number][]; timestamps: number[] } | null;
+    trajectory_data: { id: string; path: [number, number, number][]; timestamps: number[]; explored_nodes?: [number, number][] } | null;
     creator_username: string;
     created_at: string;
     updated_at: string;

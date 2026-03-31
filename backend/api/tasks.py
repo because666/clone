@@ -1,4 +1,4 @@
-﻿"""
+"""
 api/tasks.py — 航线任务调度蓝图
 
 处理任务创建、列表查询、状态更新与 SSE 实时推送。
@@ -67,6 +67,7 @@ def create_task():
         "id": result.flight_id,
         "path": result.path,
         "timestamps": result.timestamps,
+        "explored_nodes": result.explored_nodes,
     }
 
     user_id = request.user['sub']
@@ -143,11 +144,14 @@ def list_tasks():
 @role_required('ADMIN', 'DISPATCHER', 'VIEWER')
 def tasks_stream():
     """Server-Sent Events 实时任务变更推送"""
+    # 获取真实的 app 对象，避免在生成器运行时丢失请求上下文
+    app = current_app._get_current_object()
+    
     def generate():
         last_updated = None
         while True:
             try:
-                with current_app.app_context():
+                with app.app_context():
                     latest_task = Task.query.order_by(Task.updated_at.desc()).first()
                     current_time = latest_task.updated_at.isoformat() if latest_task else "none"
 

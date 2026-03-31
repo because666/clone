@@ -35,6 +35,7 @@ class TrajectoryResult:
     algo: str = "astar_v4"
     nfz_violations: int = 0
     nodes_expanded: int = 0  # 【竞赛加分 BONUS-5】A* 搜索扩展的节点数，答辩时可展示算法执行统计
+    explored_nodes: list[list] = None  # A* 搜索过程中的扩展网格点序列 [lon, lat][]
 
 def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
@@ -61,7 +62,7 @@ def _altitude_profile(n: int, dist_m: float, flight_id: str = "") -> list[float]
     return alts[:n]
 
 def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
-    """A* 寻路，返回 (路径, 扩展节点数) 元组"""
+    """A* 寻路，返回 (路径, 扩展节点数, 探索过的节点坐标列表) 元组"""
     GRID_DEG = 0.0005  
     
     start_x = int(round(a_lon / GRID_DEG))
@@ -70,7 +71,7 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
     goal_y = int(round(b_lat / GRID_DEG))
     
     if start_x == goal_x and start_y == goal_y:
-        return [(a_lat, a_lon), (b_lat, b_lon)], 0
+        return [(a_lat, a_lon), (b_lat, b_lon)], 0, []
         
     def heuristic(x, y):
         return math.hypot(x - goal_x, y - goal_y)
@@ -94,10 +95,15 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
     # 用于防止死循环的超时保护，城市级别最大放宽到 50000 个节点
     max_nodes = 50000
     expanded = 0
+    explored_nodes = []
     
     while open_set and expanded < max_nodes:
         _, current_d, current = heapq.heappop(open_set)
         expanded += 1
+        
+        # 记录探索前沿以供前端渲染动画
+        if current != 'START' and current != 'GOAL':
+            explored_nodes.append([round(current[1] * GRID_DEG, 6), round(current[0] * GRID_DEG, 6)])
         
         if current == 'GOAL':
             break
@@ -149,8 +155,13 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
                 heapq.heappush(open_set, (f_score, tentative_g, nxt))
                 came_from[nxt] = current
                 
+    # 防止长线寻路 Payload 过大，最大控制返回 1500 个探索节点
+    if len(explored_nodes) > 1500:
+        step = max(1, len(explored_nodes) // 1500)
+        explored_nodes = explored_nodes[::step][:1500]
+
     if 'GOAL' not in came_from:
-        return [(a_lat, a_lon), (b_lat, b_lon)], expanded  # 寻路失败Fallback
+        return [(a_lat, a_lon), (b_lat, b_lon)], expanded, explored_nodes  # 寻路失败Fallback
         
     path_nodes = ['GOAL']
     curr = 'GOAL'
@@ -168,7 +179,7 @@ def _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, buffer_m=10.0):
         else:
             latlon_path.append((node[1] * GRID_DEG, node[0] * GRID_DEG))
             
-    return latlon_path, expanded
+    return latlon_path, expanded, explored_nodes
 
 def _smooth_path(path_latlon, nfz_index, buffer_m=10.0):
     if not path_latlon or len(path_latlon) <= 2:
@@ -205,8 +216,9 @@ def plan(
     # 检测直飞是否会碰撞 (安全距离增加一些余量防止贴边)
     safe_buffer_m = 10.0 
     nodes_expanded = 0
+    explored_nodes = []
     if nfz_index and nfz_index.segment_intersects_any(a_lat, a_lon, b_lat, b_lon, safe_buffer_m):
-        grid_path, nodes_expanded = _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, safe_buffer_m)
+        grid_path, nodes_expanded, explored_nodes = _astar_path(a_lat, a_lon, b_lat, b_lon, nfz_index, safe_buffer_m)
         if len(grid_path) > 2:
             waypoints = _smooth_path(grid_path, nfz_index, safe_buffer_m)
 
@@ -268,4 +280,5 @@ def plan(
         nfz_violations=violations,
         algo="astar_v4",
         nodes_expanded=nodes_expanded,
+        explored_nodes=explored_nodes or [],
     )
