@@ -1,6 +1,7 @@
-import { memo } from 'react';
-import { Activity, Package, Navigation, BarChart3, ListChecks, Target, Wind, Cloud, CloudRain, CloudSnow, CloudLightning, Thermometer, Sun, PieChart } from 'lucide-react';
+import { memo, useState, useEffect } from 'react';
+import { Activity, Package, Navigation, BarChart3, ListChecks, Target, Wind, Cloud, CloudRain, CloudSnow, CloudLightning, Thermometer, Sun, PieChart, Smartphone, QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import RightControlPanel from './RightControlPanel';
 import { CITY_CONTROL_CENTER_MAP } from '../constants/map';
 import { useEnvironment } from '../contexts/EnvironmentContext';
@@ -40,6 +41,45 @@ function calcRangeLoss(windSpeed: number, temperature: number): number {
     const tempPenalty = temperature < 10 ? tempDelta * 0.4 : tempDelta * 0.15;
     return Math.min(windPenalty + tempPenalty, 50);
 }
+
+const MobileQRPopover = memo(function MobileQRPopover() {
+    const [showQR, setShowQR] = useState(false);
+    const [url, setUrl] = useState('');
+
+    useEffect(() => {
+        // 动态获取当前域名，确保在其他机器上局域网访问也能扫出准确的 IP
+        setUrl(`${window.location.protocol}//${window.location.host}/mobile`);
+    }, []);
+
+    return (
+        <div className="relative w-full">
+            <button
+                onMouseEnter={() => setShowQR(true)}
+                onMouseLeave={() => setShowQR(false)}
+                onClick={() => window.open('/mobile', '_blank')}
+                className="flex items-center justify-center gap-3 px-6 py-3 w-full bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] group overflow-hidden relative"
+            >
+                <div className="absolute inset-0 bg-gradient-to-br from-teal-900/5 to-transparent pointer-events-none"></div>
+                <Smartphone size={20} className="text-teal-700 relative z-10 shrink-0" />
+                <span className="text-base font-black tracking-tight text-slate-800 relative z-10 flex-1 text-center whitespace-nowrap">
+                    C端扫码下单
+                </span>
+            </button>
+
+            {/* Hover 展示二维码卡片 */}
+            <div className={`absolute top-0 left-full ml-4 transition-all duration-300 origin-left pointer-events-none ${showQR ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} style={{ zIndex: 100 }}>
+                <div className="bg-white/90 backdrop-blur-2xl border border-white p-5 rounded-2xl shadow-2xl flex flex-col items-center gap-3">
+                    <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-100">
+                        {url && <QRCodeSVG value={url} size={140} level="H" fgColor="#0f172a" />}
+                    </div>
+                    <div className="text-center w-full whitespace-nowrap">
+                        <p className="text-sm font-black text-slate-800 flex items-center justify-center gap-1.5 focus:outline-none"><QrCode size={14} className="text-teal-600" />手机相机扫码</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+});
 
 const EnvironmentMonitor = memo(function EnvironmentMonitor() {
     const { weather, temperature, windSpeed } = useEnvironment();
@@ -164,10 +204,11 @@ const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpe
                 >
                     <div className="absolute inset-0 bg-gradient-to-br from-violet-900/5 to-transparent pointer-events-none"></div>
                     <PieChart size={20} className="text-violet-700 relative z-10" />
-                    <span className="text-base font-black tracking-tight text-slate-800 relative z-10">
+                    <span className="text-base font-black tracking-tight text-slate-800 relative z-10 whitespace-nowrap w-[112px] text-left">
                         数据深度分析
                     </span>
                 </button>
+                <MobileQRPopover />
             </div>
 
             {/* Left Bottom Panel */}
