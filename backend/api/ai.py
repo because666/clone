@@ -1,10 +1,10 @@
-import os
+﻿import os
 import json
 import logging
 import requests
 
 from flask import Blueprint, request, jsonify
-from trajectory_lab.middleware.auth import role_required
+from backend.middleware.auth import role_required
 from shapely.geometry import Point, LineString
 
 logger = logging.getLogger("TrajServer")

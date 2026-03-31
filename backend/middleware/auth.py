@@ -1,4 +1,4 @@
-"""
+﻿"""
 middleware/auth.py — JWT 鉴权与审计日志中间件
 
 从 server.py 中提取的通用安全基础设施，供所有 Blueprint 共享。
@@ -10,7 +10,7 @@ from functools import wraps
 import jwt
 from flask import request, jsonify, current_app
 
-from trajectory_lab.models.user import db, AuditLog
+from backend.models.user import db, AuditLog
 
 logger = logging.getLogger("TrajServer")
 

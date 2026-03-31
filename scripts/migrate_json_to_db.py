@@ -16,8 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trajectory_lab.scripts.server import app
-from trajectory_lab.models.user import db, FlightLog
+from backend.scripts.server import app
+from backend.models.user import db, FlightLog
 
 CITIES = ["shenzhen", "beijing", "shanghai", "guangzhou", "chengdu", "chongqing"]
 TRAJ_DIR = ROOT / "frontend" / "public" / "data" / "processed" / "trajectories"

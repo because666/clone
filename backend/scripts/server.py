@@ -1,4 +1,4 @@
-"""
+﻿"""
 server.py — AetherWeave 后端服务入口
 
 【架构优化 P2】从 770 行上帝文件重构为精简的应用工厂 + Blueprint 注册器。
@@ -11,7 +11,7 @@ server.py — AetherWeave 后端服务入口
   - config.py            集中化配置管理
 
 启动:
-  python trajectory_lab/scripts/server.py
+  python backend/scripts/server.py
 """
 import sys
 import time
@@ -30,17 +30,17 @@ except ImportError:
     print("缺少依赖，请运行: pip install flask flask-cors flask-compress pyjwt")
     sys.exit(1)
 
-from trajectory_lab.config import Config, FRONTEND_DIST, DATA_DIR
-from trajectory_lab.models.user import db, User
-from trajectory_lab.core.poi_loader import load_city_pois
+from backend.config import Config, FRONTEND_DIST, DATA_DIR
+from backend.models.user import db, User
+from backend.core.poi_loader import load_city_pois
 
 # 导入蓝图
-from trajectory_lab.api.auth import auth_bp
-from trajectory_lab.api.trajectories import trajectories_bp, init_trajectories_bp
-from trajectory_lab.api.tasks import tasks_bp, init_tasks_bp
-from trajectory_lab.api.analysis import analysis_bp, init_analysis_bp
-from trajectory_lab.api.analytics import analytics_bp as analytics_data_bp, init_analytics_bp
-from trajectory_lab.api.ai import ai_bp
+from backend.api.auth import auth_bp
+from backend.api.trajectories import trajectories_bp, init_trajectories_bp
+from backend.api.tasks import tasks_bp, init_tasks_bp
+from backend.api.analysis import analysis_bp, init_analysis_bp
+from backend.api.analytics import analytics_bp as analytics_data_bp, init_analytics_bp
+from backend.api.ai import ai_bp
 
 logging.basicConfig(
     level=logging.INFO,

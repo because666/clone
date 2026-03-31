@@ -1,4 +1,4 @@
-"""
+﻿"""
 api/analytics.py — 数据分析蓝图
 
 为前端 /analytics 独立分析页提供聚合统计 API。
@@ -15,8 +15,8 @@ from functools import lru_cache
 
 from flask import Blueprint, request, jsonify
 
-from trajectory_lab.config import OUTPUT_BASE, DATA_DIR
-from trajectory_lab.models.user import db, FlightLog
+from backend.config import OUTPUT_BASE, DATA_DIR
+from backend.models.user import db, FlightLog
 
 logger = logging.getLogger("TrajServer")
 

@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => ({
   ],
   server: {
     proxy: {
-      // 将 /api/* 代理到 trajectory_lab Flask 服务
+      // 将 /api/* 代理到后端 Flask 服务
       '/api': {
         target: 'http://127.0.0.1:5001',
         changeOrigin: true,

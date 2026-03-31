@@ -1,8 +1,8 @@
-"""
+﻿"""
 test_algo.py — 自动化评估并量化轨迹生成算法各项指标
 
 用法:
-    python trajectory_lab/tests/test_algo.py --city shenzhen --n 100
+    python backend/tests/test_algo.py --city shenzhen --n 100
 
 指标包含：
   - 禁飞区侵入率 (Violation Rate)
@@ -20,9 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trajectory_lab.core.poi_loader import load_city_pois
-from trajectory_lab.core.planner import plan
-from trajectory_lab.core.geo_utils import haversine_m
+from backend.core.poi_loader import load_city_pois
+from backend.core.planner import plan
+from backend.core.geo_utils import haversine_m
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 

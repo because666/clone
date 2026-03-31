@@ -1,4 +1,4 @@
-"""
+﻿"""
 api/trajectories.py — 轨迹管理蓝图
 
 处理轨迹的批量生成、单条生成、查询和删除。
@@ -11,12 +11,12 @@ import logging
 
 from flask import Blueprint, request, jsonify
 
-from trajectory_lab.config import OUTPUT_BASE
-from trajectory_lab.models.user import db, FlightLog
-from trajectory_lab.core.planner import plan
-from trajectory_lab.core.geo_utils import haversine_m
-from trajectory_lab.scripts.batch_generate import build_output
-from trajectory_lab.middleware.auth import role_required, log_audit
+from backend.config import OUTPUT_BASE
+from backend.models.user import db, FlightLog
+from backend.core.planner import plan
+from backend.core.geo_utils import haversine_m
+from backend.scripts.batch_generate import build_output
+from backend.middleware.auth import role_required, log_audit
 
 logger = logging.getLogger("TrajServer")
 

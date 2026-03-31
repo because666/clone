@@ -1,4 +1,4 @@
-"""
+﻿"""
 api/auth.py — 认证蓝图
 
 处理用户登录、个人信息查询等认证相关 API。
@@ -9,8 +9,8 @@ import logging
 import jwt
 from flask import Blueprint, request, jsonify, current_app
 
-from trajectory_lab.models.user import User
-from trajectory_lab.middleware.auth import role_required, log_audit
+from backend.models.user import User
+from backend.middleware.auth import role_required, log_audit
 
 logger = logging.getLogger("TrajServer")
 

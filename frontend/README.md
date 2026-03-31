@@ -1,4 +1,4 @@
-# 城市低空物流网络 - 前端 (Frontend)
+﻿# 城市低空物流网络 - 前端 (Frontend)
 
 本项目是基于 React + TypeScript + Vite 构建的 3D 可视化 WebGIS 应用。主要利用 `Deck.gl` 和 `MapLibre GL JS` 进行大规模无人机轨迹、城市 3D 建筑及能效热力图的高性能渲染。
 
@@ -64,4 +64,4 @@ npm run build
 ```
 
 ### 数据说明
-运行此前端需要保证本机的 `/public/data/` 目录中已放置了最新的且经过 Python 脚本 `trajectory_lab` 生成的标准化 `geojson` 和 `json` 文件，否则可能抛出抓取失败的错误并在屏幕中央一直转圈。
+运行此前端需要保证本机的 `/public/data/` 目录中已放置了最新的且经过 Python 脚本 `backend` 生成的标准化 `geojson` 和 `json` 文件，否则可能抛出抓取失败的错误并在屏幕中央一直转圈。

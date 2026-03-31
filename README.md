@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <!-- 项目专属 Logo (已缩放至最佳展示尺寸) -->
   <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="90" />
 
@@ -149,7 +149,7 @@ python -m venv venv
 # 激活环境 (Windows 用户运行: .\venv\Scripts\activate)
 source venv/bin/activate
 
-cd trajectory_lab
+cd backend
 # 安装依赖并启动
 pip install -r requirements.txt
 python scripts/server.py
@@ -178,7 +178,7 @@ AetherWeave/
 │   │   ├── types/            # TypeScript 类型定义
 │   │   └── utils/            # ArrayBuffer 性能优化与工具函数
 │   └── public/               # 3D 模型、静态纹理及 GeoJSON 数据
-├── trajectory_lab/           # 后端服务与算法引擎 (Python + Flask)
+├── backend/           # 后端服务与算法引擎 (Python + Flask)
 │   ├── scripts/server.py     # Flask 主服务 (认证、调度、SSE、ROI 分析)
 │   ├── core/                 # A* 空域避障、NFZ 碰撞检测、POI 匹配
 │   ├── models/               # SQLAlchemy ORM 模型 (用户、任务)

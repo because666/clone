@@ -1,4 +1,4 @@
-# 📦 数据处理脚本集
+﻿# 📦 数据处理脚本集
 
 > 本目录包含 AetherWeave 平台的数据采集、预处理和生成流水线脚本。
 
@@ -35,7 +35,7 @@
 
 ```bash
 # 1. 安装依赖
-pip install -r trajectory_lab/requirements.txt
+pip install -r backend/requirements.txt
 
 # 2. 一键生成所有城市轨迹（最常用）
 python scripts/generate_all_cities.py

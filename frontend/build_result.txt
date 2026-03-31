@@ -1,0 +1,77 @@
+﻿
+> frontend@1.0.0 build
+> tsc -b && vite build
+
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+node.exe : [33mnode_modules/@loaders.gl/worker-utils/dist/
+lib/process-utils/child-process-proxy.js (56:50): "spawn" i
+s not exported by "__vite-browser-external", imported by "n
+ode_modules/@loaders.gl/worker-utils/dist/lib/process-utils
+/child-process-proxy.js".[39m
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\22433\AppD
+ata\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mnode_mod 
+   ul...proxy.js".[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[32m鉁?[39m 3582 modules transformed.
+[33mCircular chunk: map-vendor -> react-vendor -> map-vend
+or. Please adjust the manual chunk logic for these chunks.
+[39m
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32massets/jsonWorker-D0jQNIC7.js                [39m[1m[2m    0.31 kB[22m[1m[22m
+[2mdist/[22m[32mindex.html                                   [39m[1m[2m    0.70 kB[22m[1m[22m[2m 鈹?gzip:   0.35 kB[22m
+[2mdist/[22m[32massets/animation.worker-PAkyMuoJ.js          [39m[1m[2m    1.87 kB[22m[1m[22m
+[2mdist/[22m[35massets/map-vendor-DwUhsmFz.css               [39m[1m[2m   69.92 kB[22m[1m[22m[2m 鈹?gzip:  10.05 kB[22m
+[2mdist/[22m[35massets/index-CDtkof17.css                    [39m[1m[2m   99.62 kB[22m[1m[22m[2m 鈹?gzip:  13.96 kB[22m
+[2mdist/[22m[36massets/PayloadDistributionChart-CBfXKfAA.js  [39m[1m[2m    3.54 kB[22m[1m[22m[2m 鈹?gzip:   1.53 kB[22m
+[2mdist/[22m[36massets/AnalyticsPanel-Bk5e9_yc.js            [39m[1m[2m    3.60 kB[22m[1m[22m[2m 鈹?gzip:   1.24 kB[22m
+[2mdist/[22m[36massets/index-DY4LEIAu.js                     [39m[1m[2m    4.89 kB[22m[1m[22m[2m 鈹?gzip:   2.11 kB[22m
+[2mdist/[22m[36massets/map-cMYfyh6-.js                       [39m[1m[2m    6.54 kB[22m[1m[22m[2m 鈹?gzip:   3.13 kB[22m
+[2mdist/[22m[36massets/AnalyticsPage-C-UkTUKQ.js             [39m[1m[2m   13.19 kB[22m[1m[22m[2m 鈹?gzip:   4.63 kB[22m
+[2mdist/[22m[36massets/TaskManagementPanel-BGtGjJJq.js       [39m[1m[2m   16.48 kB[22m[1m[22m[2m 鈹?gzip:   4.84 kB[22m
+[2mdist/[22m[36massets/LoginPage-DIvmGd3i.js                 [39m[1m[2m   42.22 kB[22m[1m[22m[2m 鈹?gzip:  16.87 kB[22m
+[2mdist/[22m[36massets/DashboardPage-etu8ppWX.js             [39m[1m[2m  102.65 kB[22m[1m[22m[2m 鈹?gzip:  29.51 kB[22m
+[2mdist/[22m[36massets/react-vendor-B1127Ntl.js              [39m[1m[2m  244.83 kB[22m[1m[22m[2m 鈹?gzip:  78.52 kB[22m
+[2mdist/[22m[36massets/chart-vendor-Og1xzrAO.js              [39m[1m[33m1,137.89 kB[39m[22m[2m 鈹?gzip: 377.67 kB[22m
+[2mdist/[22m[36massets/map-vendor-CwHkuqFf.js                [39m[1m[33m1,975.70 kB[39m[22m[2m 鈹?gzip: 534.83 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. 
+Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve ch
+unking: https://rollupjs.org/configuration-options/#output-
+manualchunks
+- Adjust chunk size limit for this warning via build.chunkS
+izeWarningLimit.[39m
+[32m鉁?built in 9.37s[39m
+
+鉁?[vite-plugin-compression]:algorithm=gzip - compressed file successfully: 
+dist/D:/develop/demo/frontend/assets/AnalyticsPage-C-UkTUKQ.js.gz                              12.88kb / gzip: 4.52kb
+dist/D:/develop/demo/frontend/assets/index-CDtkof17.css.gz                                     97.29kb / gzip: 13.35kb
+dist/D:/develop/demo/frontend/assets/TaskManagementPanel-BGtGjJJq.js.gz                        16.09kb / gzip: 4.72kb
+dist/D:/develop/demo/frontend/assets/map-vendor-DwUhsmFz.css.gz                                68.28kb / gzip: 9.76kb
+dist/D:/develop/demo/frontend/assets/LoginPage-DIvmGd3i.js.gz                                  41.23kb / gzip: 16.48kb
+dist/D:/develop/demo/frontend/assets/DashboardPage-etu8ppWX.js.gz                              100.25kb / gzip: 28.71kb
+dist/D:/develop/demo/frontend/assets/react-vendor-B1127Ntl.js.gz                               239.09kb / gzip: 76.55kb
+dist/D:/develop/demo/frontend/assets/chart-vendor-Og1xzrAO.js.gz                               1111.22kb / gzip: 368.13kb
+dist/D:/develop/demo/frontend/data/processed/chongqing_energy_predictions.json.gz              1263.97kb / gzip: 418.89kb
+dist/D:/develop/demo/frontend/data/processed/shanghai_energy_predictions.json.gz               1333.67kb / gzip: 443.72kb
+dist/D:/develop/demo/frontend/data/processed/beijing_energy_predictions.json.gz                1390.20kb / gzip: 461.48kb
+dist/D:/develop/demo/frontend/data/processed/chengdu_energy_predictions.json.gz                1427.43kb / gzip: 473.04kb
+dist/D:/develop/demo/frontend/data/processed/guangzhou_energy_predictions.json.gz              1400.61kb / gzip: 464.29kb
+dist/D:/develop/demo/frontend/assets/map-vendor-CwHkuqFf.js.gz                                 1929.40kb / gzip: 520.96kb
+dist/D:/develop/demo/frontend/data/processed/shenzhen_energy_predictions.json.gz               1317.28kb / gzip: 436.83kb
+dist/D:/develop/demo/frontend/data/processed/trajectories/chongqing_uav_trajectories.json.gz   2917.30kb / gzip: 703.65kb
+dist/D:/develop/demo/frontend/data/processed/trajectories/shenzhen_uav_trajectories.json.gz    3041.60kb / gzip: 729.41kb
+dist/D:/develop/demo/frontend/data/processed/trajectories/beijing_uav_trajectories.json.gz     3225.75kb / gzip: 786.03kb
+dist/D:/develop/demo/frontend/data/processed/trajectories/guangzhou_uav_trajectories.json.gz   3233.13kb / gzip: 780.46kb
+dist/D:/develop/demo/frontend/data/processed/trajectories/shanghai_uav_trajectories.json.gz    3082.74kb / gzip: 757.58kb
+dist/D:/develop/demo/frontend/data/processed/trajectories/chengdu_uav_trajectories.json.gz     3314.22kb / gzip: 806.90kb
+
+

@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 import numpy as np
 import json
 import math
@@ -53,8 +53,8 @@ def train_model():
     r2 = r2_score(y_test, y_pred)
     print(f"RMSE: {rmse:.2f} W, R2: {r2:.4f}")
     
-    # Save the model relative to trajectory_lab
-    model_dir = ROOT / 'trajectory_lab' / 'models'
+    # Save the model relative to backend
+    model_dir = ROOT / 'backend' / 'models'
     model_dir.mkdir(exist_ok=True)
     joblib.dump(model, str(model_dir / 'energy_rf_model.pkl'))
     return model
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--city", default="shenzhen", help="City name or multiple cities separated by comma")
     args = parser.parse_args()
 
-    model_path = ROOT / 'trajectory_lab' / 'models' / 'energy_rf_model.pkl'
+    model_path = ROOT / 'backend' / 'models' / 'energy_rf_model.pkl'
     if model_path.exists():
         print("Loading existing model...")
         model = joblib.load(str(model_path))

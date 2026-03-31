@@ -1,4 +1,4 @@
-"""
+﻿"""
 api/tasks.py — 航线任务调度蓝图
 
 处理任务创建、列表查询、状态更新与 SSE 实时推送。
@@ -9,9 +9,9 @@ import logging
 
 from flask import Blueprint, request, jsonify, Response, current_app
 
-from trajectory_lab.models.user import db, User, Task
-from trajectory_lab.core.planner import plan
-from trajectory_lab.middleware.auth import role_required, log_audit
+from backend.models.user import db, User, Task
+from backend.core.planner import plan
+from backend.middleware.auth import role_required, log_audit
 
 logger = logging.getLogger("TrajServer")
 

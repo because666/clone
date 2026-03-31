@@ -22,10 +22,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY trajectory_lab/requirements.txt ./requirements.txt
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY trajectory_lab/ ./trajectory_lab/
+COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 COPY data/ ./data/
 
@@ -38,7 +38,7 @@ ENV PYTHONPATH=/app
 ENV PORT=8080
 
 # 生产环境使用 gunicorn 多 worker 并发，替代 Flask 单线程开发服务器
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "trajectory_lab.scripts.server:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--timeout", "120", "backend.scripts.server:create_app()"]
 
 # 健康检查，配合 /api/health 端点
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

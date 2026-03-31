@@ -1,4 +1,4 @@
-"""
+﻿"""
 poi_loader.py — POI 加载与预处理
 
 功能：
@@ -17,7 +17,7 @@ from .no_fly_zones import NoFlyZone, NoFlyZoneIndex
 
 logger = logging.getLogger(__name__)
 
-# 项目根目录（trajectory_lab 的上一级）
+# 项目根目录（backend 的上一级）
 _ROOT = Path(__file__).resolve().parent.parent.parent
 
 

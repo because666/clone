@@ -1,8 +1,8 @@
-"""
+﻿"""
 single_generate.py — 指定两点生成单条飞行轨迹
 
 用法:
-    python trajectory_lab/scripts/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
+    python backend/scripts/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
 """
 import sys
 import json
@@ -14,9 +14,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trajectory_lab.core.poi_loader import load_city_pois
-from trajectory_lab.core.planner import plan
-from trajectory_lab.scripts.batch_generate import build_output
+from backend.core.poi_loader import load_city_pois
+from backend.core.planner import plan
+from backend.scripts.batch_generate import build_output
 
 logging.basicConfig(
     level=logging.INFO,

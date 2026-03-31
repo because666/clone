@@ -1,8 +1,8 @@
-"""
+﻿"""
 batch_generate.py — 批量随机生成飞行轨迹 (多进程加速)
 
 用法:
-    python trajectory_lab/scripts/batch_generate.py --city shenzhen --n 2000
+    python backend/scripts/batch_generate.py --city shenzhen --n 2000
 
 功能:
   1. 加载城市 POI，过滤被禁飞区覆盖的 demand
@@ -24,8 +24,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trajectory_lab.core.poi_loader import load_city_pois, report_blocked
-from trajectory_lab.core.planner import plan
+from backend.core.poi_loader import load_city_pois, report_blocked
+from backend.core.planner import plan
 
 logging.basicConfig(
     level=logging.INFO,
@@ -142,7 +142,7 @@ def main():
     rng = random.Random(args.seed)
     
     # 构建任务数据
-    from trajectory_lab.core.geo_utils import haversine_m
+    from backend.core.geo_utils import haversine_m
     tasks = []
     attempts = 0
     max_attempts = args.n * 20
@@ -178,8 +178,8 @@ def main():
 
     # 可选：同步写入数据库持久化
     if args.persist:
-        from trajectory_lab.scripts.server import app
-        from trajectory_lab.models.user import db, FlightLog
+        from backend.scripts.server import app
+        from backend.models.user import db, FlightLog
 
         batch_id = str(uuid.uuid4())
         algo_name = data.get("_meta", {}).get("algo", "unknown")

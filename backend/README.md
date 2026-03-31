@@ -1,11 +1,11 @@
-# trajectory_lab — 飞行轨迹算法开发模块
+﻿# backend — 飞行轨迹算法开发模块
 
 独立的飞行轨迹算法开发区，与主项目完全隔离。
 
 ## 目录结构
 
 ```
-trajectory_lab/
+backend/
 ├── core/             # 核心算法逻辑
 ├── models/           # 模型文件 (pkl)
 ├── scripts/          # 入口脚本
@@ -25,22 +25,22 @@ pip install flask flask-cors pandas scikit-learn joblib
 
 ### 2. 批量生成轨迹（直接写入前端）
 ```bash
-python trajectory_lab/scripts/batch_generate.py --city shenzhen --n 1000
+python backend/scripts/batch_generate.py --city shenzhen --n 1000
 ```
 
 ### 3. 指定两点生成单条轨迹
 ```bash
 # 通过 POI ID
-python trajectory_lab/scripts/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
+python backend/scripts/single_generate.py --city shenzhen --from <poi_id> --to <poi_id>
 
 # 通过经纬度
-python trajectory_lab/scripts/single_generate.py --city shenzhen \
+python backend/scripts/single_generate.py --city shenzhen \
   --from-latlon 22.53,113.93 --to-latlon 22.55,113.95
 ```
 
 ### 4. 启动 API 服务（供前端调试面板调用）
 ```bash
-python trajectory_lab/scripts/server.py
+python backend/scripts/server.py
 ```
 
 ### 5. 启动前端
@@ -55,7 +55,7 @@ cd frontend && npm run dev
 对每个城市，`poi_loader.load_city_pois()` 会自动过滤掉**落在禁飞区内的 demand POI**，避免不合规的起降点污染轨迹生成。
 
 ```python
-from trajectory_lab.core.poi_loader import load_city_pois
+from backend.core.poi_loader import load_city_pois
 city_pois = load_city_pois("shenzhen", buffer_m=0)
 print(f"净化后可用: {len(city_pois.demand_clean)}")
 print(f"被禁飞区覆盖: {len(city_pois.demand_blocked)}")

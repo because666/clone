@@ -1,4 +1,4 @@
-"""
+﻿"""
 api/analysis.py — 分析蓝图
 
 处理 ROI 沙盘分析、POI 查询、系统状态等分析类 API。
@@ -8,7 +8,7 @@ import logging
 
 from flask import Blueprint, request, jsonify
 
-from trajectory_lab.core.geo_utils import haversine_m
+from backend.core.geo_utils import haversine_m
 
 logger = logging.getLogger("TrajServer")
 
