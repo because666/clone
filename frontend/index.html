@@ -8,6 +8,21 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 全局错误捕获（用于诊断 Vercel 部署黑屏问题）
+      window.__BOOT_ERRORS = [];
+      window.addEventListener('error', function(e) {
+        window.__BOOT_ERRORS.push('ERROR: ' + e.message + ' at ' + (e.filename||'') + ':' + e.lineno);
+        document.getElementById('root').style.cssText = 'color:#f87171;padding:40px;font-family:monospace;white-space:pre-wrap;font-size:14px;';
+        document.getElementById('root').textContent = '❌ 启动错误:\n' + window.__BOOT_ERRORS.join('\n');
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : 'Unknown rejection';
+        window.__BOOT_ERRORS.push('REJECTION: ' + msg);
+        document.getElementById('root').style.cssText = 'color:#f87171;padding:40px;font-family:monospace;white-space:pre-wrap;font-size:14px;';
+        document.getElementById('root').textContent = '❌ 启动错误:\n' + window.__BOOT_ERRORS.join('\n');
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
