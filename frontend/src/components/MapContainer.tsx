@@ -6,6 +6,12 @@ import { FlyToInterpolator } from '@deck.gl/core';
 import { Map as MapGL, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
+// 【修复】显式注册 WebGL 设备适配器，避免 luma.gl v9 在 WebGPU 不可用时
+// ResizeObserver 竞态导致 device.limits.maxTextureDimension2D 读取 undefined 崩溃
+import {luma} from '@luma.gl/core';
+import {webgl2Adapter} from '@luma.gl/webgl';
+luma.registerAdapters([webgl2Adapter]);
+
 import { INITIAL_VIEW_STATE, CITY_COORDS } from '../constants/map';
 import { useCityData } from '../hooks/useCityData';
 import type { UAVPath } from '../types/map';
@@ -318,6 +324,10 @@ export default function MapContainer() {
                     layers={layers}
                     onViewStateChange={handleViewStateChange}
                     onClick={handleMapClick}
+                    deviceProps={{
+                        type: 'webgl',
+                        adapters: [webgl2Adapter],
+                    }}
                 >
                     <MapGL
                         ref={mapRef}

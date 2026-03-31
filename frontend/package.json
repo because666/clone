@@ -13,6 +13,7 @@
   "dependencies": {
     "@deck.gl/geo-layers": "^9.2.9",
     "@deck.gl/layers": "^9.2.9",
+    "@deck.gl/mesh-layers": "^9.2.9",
     "@deck.gl/react": "^9.2.9",
     "@fontsource/share-tech-mono": "^5.2.7",
     "axios": "^1.13.6",
