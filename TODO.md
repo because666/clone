@@ -1,4 +1,4 @@
-﻿# TODO
+# TODO
 
 > 本文档用于团队协作，记录各个模块的开发进度和认领人
 > 格式：`[认领人] 任务描述`
@@ -12,6 +12,9 @@
 ## In Progress
 
 ##  Done
+[应飞扬] 全栈：实现 C 端移动端 H5 下单闭环（`/mobile` 仿小程序 3 步下单 + `api/mobile.py` 免注册鉴权蓝图 + 订单追踪），复用全部后端 API，Dashboard 顶栏一键跳转
+[应飞扬] 前端：新增 AI 技术路径展示页 `/about`（AI 工具清单 + Prompt Engineering 6 步流程图 + 系统架构总览 + 重庆大学校徽与团队信息 + 原创声明 + 地图合规声明），满足大赛附件4合规要求
+[应飞扬] 工程：全局 CSS 滚动修复 + 地图合规水印 + Dashboard/Analytics 导航入口集成 + README 校徽整合
 [应飞扬] 全栈：落地独立全屏数据分析页 `/analytics`（6 大可视化模块 + 后端聚合统计 API + 跨城市雷达对比 + 告警饼图 + 算法性能面板），实现 Dashboard ↔ Analytics 双页导航体系
 [应飞扬] 算法/前端：实现 4D 时空冲突检测引擎——基于空间哈希 O(N) 邻域碰撞检测 + 时间切片分帧均摊 + ArcLayer 实时冲突弧线渲染 + 三级告警（conflict/danger-zone/low-battery）统一推送
 [应飞扬] 算法/工程：上线 Qwen 大模型 AI 航线安全预审中枢（基于 Shapely 实现 3D 禁飞区雷达穿透拦截），并封装桌面级 Qwen 悬浮晶核拟态交互组件

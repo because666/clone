@@ -4,9 +4,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100vh;
   font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   background-color: #0f172a;
   /* Custom dark slate background */
@@ -14,8 +13,15 @@ body {
 }
 
 #root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 3D 大屏专用：锁定视口，禁止页面级滚动 */
+.dashboard-fullscreen {
   width: 100vw;
   height: 100vh;
+  overflow: hidden;
 }
 
 /* 告警 Toast 滑入动画 */

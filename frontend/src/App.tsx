@@ -9,6 +9,8 @@ import { AlertNotificationProvider } from './components/AlertNotificationProvide
 const LoginPage = React.lazy(() => import('./pages/LoginPage'));
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 const AnalyticsPage = React.lazy(() => import('./pages/AnalyticsPage'));
+const MobilePage = React.lazy(() => import('./pages/MobilePage'));
+const AboutPage = React.lazy(() => import('./pages/AboutPage'));
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
           <AlertNotificationProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/mobile/*" element={<MobilePage />} />
+              <Route path="/about" element={<AboutPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />

@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BarChart3, Map, LogOut, ChevronDown } from 'lucide-react';
+import { BarChart3, Map, LogOut, ChevronDown, Info } from 'lucide-react';
 import { CITIES } from '../constants/map';
 import { useState } from 'react';
 
@@ -64,6 +64,17 @@ export default function AnalyticsNavBar({ currentCity, onCityChange }: Props) {
                 >
                     <BarChart3 size={14} />
                     数据分析
+                </button>
+                <button
+                    onClick={() => navigate('/about')}
+                    className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 ${
+                        location.pathname === '/about'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'text-slate-600 hover:bg-white/60'
+                    }`}
+                >
+                    <Info size={14} />
+                    技术路径
                 </button>
             </div>
 

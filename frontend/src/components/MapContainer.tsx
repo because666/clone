@@ -432,8 +432,18 @@ export default function MapContainer() {
                     />
                 )}
 
-                <div className="absolute top-4 left-4 bg-white/80 backdrop-blur text-slate-700 text-xs px-3 py-1.5 rounded-lg shadow border border-slate-200 z-10 pointer-events-none">
-                    💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
+                <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+                    <div className="bg-white/80 backdrop-blur text-slate-700 text-xs px-3 py-1.5 rounded-lg shadow border border-slate-200 pointer-events-none">
+                        💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
+                    </div>
+                    <a href="/mobile" target="_blank" className="pointer-events-auto flex items-center gap-2.5 px-5 py-2.5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all no-underline">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+                        <span className="text-sm font-black tracking-tight text-slate-800">C端用户入口</span>
+                    </a>
+                    <a href="/about" target="_blank" className="pointer-events-auto flex items-center gap-2.5 px-5 py-2.5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all no-underline">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                        <span className="text-sm font-black tracking-tight text-slate-800">技术路径</span>
+                    </a>
                 </div>
 
                 {/* 毛玻璃风格的灵动胶囊提示条，不再遮挡视线，已切换白昼主题 */}
@@ -468,6 +478,12 @@ export default function MapContainer() {
 
                 <WeatherOverlay />
                 <AiMascot isRightPanelOpen={isRightPanelOpen} />
+
+                {/* 地图合规声明水印 (#11) */}
+                <div className="absolute bottom-9 right-3 z-10 pointer-events-none bg-white/70 backdrop-blur-sm px-2.5 py-1 rounded-md border border-slate-200/50">
+                    <p className="text-[8px] text-slate-500 font-semibold leading-tight m-0">底图: CARTO Positron (OpenStreetMap)</p>
+                    <p className="text-[7px] text-slate-400 leading-tight m-0">仅供学术研究展示 · 不涉及国界行政区划标注</p>
+                </div>
             </div>
         </ErrorBoundary>
     );

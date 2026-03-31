@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <!-- 项目专属 Logo (已缩放至最佳展示尺寸) -->
   <img src="docs/assets/logo.png" alt="AetherWeave Logo" width="90" />
 
@@ -191,6 +191,14 @@ AetherWeave/
 
 
 ## 团队成员
+
+<div align="center">
+  <img src="docs/assets/CQU.png" alt="重庆大学" width="280" />
+  <br/>
+  <sub><b>大数据与软件学院</b></sub>
+</div>
+
+<br/>
 
 - **指导老师**：杨正益
 - **核心开发组**：应飞扬、邓博、谢丽欣、罗楚瑞

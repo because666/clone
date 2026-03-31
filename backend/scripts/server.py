@@ -1,4 +1,4 @@
-﻿"""
+"""
 server.py — AetherWeave 后端服务入口
 
 【架构优化 P2】从 770 行上帝文件重构为精简的应用工厂 + Blueprint 注册器。
@@ -41,6 +41,7 @@ from backend.api.tasks import tasks_bp, init_tasks_bp
 from backend.api.analysis import analysis_bp, init_analysis_bp
 from backend.api.analytics import analytics_bp as analytics_data_bp, init_analytics_bp
 from backend.api.ai import ai_bp
+from backend.api.mobile import mobile_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,6 +96,7 @@ def create_app() -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(analytics_data_bp)
     app.register_blueprint(ai_bp)
+    app.register_blueprint(mobile_bp)
 
     # 【工程化改进 S8】标准化健康检查端点
     _start_time = time.time()
