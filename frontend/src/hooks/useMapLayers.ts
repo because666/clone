@@ -25,6 +25,7 @@ interface UseMapLayersParams {
     selectedFlight: any;
     pickedFromDisplay: { lat: number; lon: number; id: string; name: string } | null;
     currentTimeRef: React.MutableRefObject<number>;
+    timeRangeRef: React.MutableRefObject<{ min: number; max: number }>;
     sandboxCenters: { lat: number; lon: number }[];
     sandboxRadius: number;
     radarSweepActive: boolean;
@@ -34,6 +35,8 @@ interface UseMapLayersParams {
     handleDemandPick: (info: any) => void;
     visionMode: VisionMode;
     aStarProgressIndex?: number;
+    aStarComplete?: boolean;
+    aStarFade?: number;
 }
 
 /**
@@ -52,6 +55,7 @@ export function useMapLayers({
     selectedFlight,
     pickedFromDisplay,
     currentTimeRef,
+    timeRangeRef,
     sandboxCenters,
     sandboxRadius,
     radarSweepActive,
@@ -61,6 +65,8 @@ export function useMapLayers({
     handleDemandPick,
     visionMode,
     aStarProgressIndex = 0,
+    aStarComplete = false,
+    aStarFade = 0,
 }: UseMapLayersParams) {
 
     const sensitivePoints = useMemo(() =>
@@ -453,41 +459,122 @@ export function useMapLayers({
     }, [radarSweepActive, radarSweepRadius, sandboxCenters]);
 
     // ==================== [赛事核心] A* 探索波浪渲染图层 ====================
+    // 双层设计：暗色"已探索区域" + 亮色"搜索前沿"，清晰展现 A* 扩散逻辑
     const aStarExplorationLayer = useMemo(() => {
         if (!selectedFlight || !selectedFlight.explored_nodes) return null;
-        
-        // 【视觉优化】激波效果：绝不保留所有历史节点避免大面积光污染密集堆叠
-        // 只截取冲在最前面的扫描前沿(波动尾迹)
-        const tailLength = 200; 
-        const startIndex = Math.max(0, aStarProgressIndex - tailLength);
-        const visibleNodes = selectedFlight.explored_nodes.slice(startIndex, Math.max(0, aStarProgressIndex));
+        const allNodes = selectedFlight.explored_nodes;
+        if (!allNodes.length || aStarProgressIndex <= 0) return null;
 
-        return new ScatterplotLayer({
-            id: 'astar-exploration-layer',
-            data: visibleNodes,
-            getPosition: (d: any) => [d[1], d[0]], // [lon, lat] 纠偏 
-            getRadius: 35, // 使用真实物理半径（米），由于网格约 50 米，设为 35 米可形成点阵感
-            radiusMinPixels: 1,
-            radiusMaxPixels: 6, // 避免缩小地图时满屏大光斑
-            // 采用基于索引的新老节点衰减效果
-            getFillColor: (_: any, { index }: any) => {
-                const total = visibleNodes.length;
-                // 计算该节点离"探测前沿"有多远，越接近前沿的(index趋近total)越白/越亮
-                const ratio = Math.max(0, index / total); 
-                return [
-                    Math.floor(20 + 235 * ratio * ratio), // R (变白)
-                    Math.floor(255 * ratio),              // G (荧光绿)
-                    Math.floor(100 + 155 * ratio),        // B (偏蓝)
-                    Math.floor(200 * ratio)               // A (只让最靠近前锋的点显形)
-                ];
-            },
-            parameters: { depthTest: false, blend: true, blendEquation: 32774 },
-            pickable: false,
-            updateTriggers: {
-                getFillColor: [visibleNodes.length], // 当节点数发生变化时强制重绘着色
+        // 已探索的全部历史节点
+        const historyNodes = allNodes.slice(0, Math.min(aStarProgressIndex, allNodes.length));
+
+        // 搜索完成后：计算哪些粒子在最终路径附近（保持高亮），其余淡化
+        let onPathSet: Set<number> | null = null;
+        if (aStarComplete && selectedFlight.path?.length >= 2) {
+            onPathSet = new Set<number>();
+            const pathPoints = selectedFlight.path;
+            const threshold = 0.0012;
+            for (let i = 0; i < historyNodes.length; i++) {
+                const [nodeLat, nodeLon] = historyNodes[i];
+                for (const pp of pathPoints) {
+                    const [ppLon, ppLat] = pp;
+                    if (Math.abs(nodeLat - ppLat) < threshold && Math.abs(nodeLon - ppLon) < threshold) {
+                        onPathSet.add(i);
+                        break;
+                    }
+                }
             }
+        }
+
+        // 使用 aStarFade (0→1) 实现平滑过渡
+        const fade = aStarComplete ? aStarFade : 0;
+
+        const layers: any[] = [
+            new ScatterplotLayer({
+                id: 'astar-history-layer',
+                data: historyNodes,
+                getPosition: (d: any) => [d[1], d[0]],
+                getRadius: 25,
+                radiusMinPixels: 2,
+                radiusMaxPixels: 4,
+                getFillColor: onPathSet
+                    ? ((_: any, { index }: any) => {
+                        if (onPathSet!.has(index)) {
+                            // 路径沿线：从搜索色平滑过渡到高亮色
+                            const r = Math.floor(0 + 0 * fade);
+                            const g = Math.floor(200 + 55 * fade);
+                            const b = Math.floor(180 + 30 * fade);
+                            const a = Math.floor(90 + 70 * fade);
+                            return [r, g, b, a];
+                        }
+                        // 其余粒子：平滑淡出
+                        const a = Math.floor(90 - 65 * fade);
+                        return [0, 200, 180, a];
+                    })
+                    : [0, 200, 180, 90],
+                parameters: { depthTest: false, blend: true, blendEquation: 32774 },
+                pickable: false,
+                updateTriggers: { getFillColor: [historyNodes.length, aStarComplete, fade] }
+            }),
+        ];
+
+        // 搜索进行中：显示前沿波
+        if (!aStarComplete) {
+            const frontierSize = Math.min(80, Math.max(20, Math.floor(allNodes.length * 0.05)));
+            const frontierStart = Math.max(0, aStarProgressIndex - frontierSize);
+            const frontierNodes = allNodes.slice(frontierStart, Math.min(aStarProgressIndex, allNodes.length));
+
+            layers.push(
+                new ScatterplotLayer({
+                    id: 'astar-frontier-layer',
+                    data: frontierNodes,
+                    getPosition: (d: any) => [d[1], d[0]],
+                    getRadius: 45,
+                    radiusMinPixels: 4,
+                    radiusMaxPixels: 10,
+                    getFillColor: (_: any, { index }: any) => {
+                        const ratio = index / (frontierNodes.length || 1);
+                        return [
+                            Math.floor(100 + 155 * ratio),
+                            255,
+                            Math.floor(150 + 105 * ratio),
+                            Math.floor(140 + 115 * ratio)
+                        ];
+                    },
+                    parameters: { depthTest: false, blend: true, blendEquation: 32774 },
+                    pickable: false,
+                    updateTriggers: { getFillColor: [frontierNodes.length] }
+                })
+            );
+        }
+
+        return layers;
+    }, [selectedFlight, aStarProgressIndex, aStarComplete, aStarFade]);
+
+    // ==================== A* 寻路完成 → 最终路径高亮层 ====================
+    const aStarPathHighlightLayer = useMemo(() => {
+        if (!aStarComplete || !selectedFlight?.path) return null;
+        const path = selectedFlight.path;
+        if (path.length < 2) return null;
+
+        // 路径高亮的透明度随 aStarFade 渐入
+        const pathAlpha = Math.floor(230 * aStarFade);
+
+        return new PathLayer({
+            id: 'astar-path-highlight',
+            data: [{ path: path.map((p: any) => [p[0], p[1], (p[2] || 0) + 5]) }],
+            getPath: (d: any) => d.path,
+            getColor: [0, 255, 200, pathAlpha],
+            getWidth: 5,
+            widthMinPixels: 2,
+            widthMaxPixels: 6,
+            jointRounded: true,
+            capRounded: true,
+            parameters: { depthTest: false },
+            pickable: false,
+            updateTriggers: { getColor: [aStarFade] },
         });
-    }, [selectedFlight, aStarProgressIndex]);
+    }, [aStarComplete, selectedFlight, aStarFade]);
 
     // ==================== 最终组装 ====================
     // 【性能优化 P0-A】用 useMemo 包裹最终 layers 数组的组装，
@@ -501,7 +588,8 @@ export function useMapLayers({
             roiRadiusLayer,     // 重新加上沙盘的静态探测圈图层
             radarSweepLayer,    // 添加沙盘动态激波扩散层
             roiCenterModelLayer,
-            aStarExplorationLayer,
+            ...(aStarExplorationLayer || []),
+            aStarPathHighlightLayer,
             // ============ 4D 冲突检测弧线层 ============
             new ArcLayer({
                 id: 'conflict-arc-layer',
@@ -589,17 +677,37 @@ export function useMapLayers({
                 id: 'selected-uav-layer',
                 data: [selectedFlight],
                 getPosition: (d: any) => {
-                    const t = currentTimeRef.current;
+                    const globalT = currentTimeRef.current;
                     const times = d.timestamps;
-                    const index = binarySearchTimestamp(times, t);
+                    if (!times || times.length < 2) return d.path[0];
+
+                    const t0_abs = times[0];
+                    const tEnd_abs = times[times.length - 1];
+                    const flightDur = tEnd_abs - t0_abs;
+                    const cycleDur = timeRangeRef.current.max;
+
+                    // 【核心修复】使用与 animation.ts 完全相同的时间计算
+                    let expectedT: number;
+                    if (d.fromTaskSystem) {
+                        // 任务轨迹：绝对时间，不循环
+                        expectedT = Math.min(Math.max(globalT, t0_abs), tEnd_abs);
+                    } else {
+                        // 仿真轨迹：循环取模
+                        const localT = (globalT - t0_abs) % cycleDur;
+                        const bounded = (localT + cycleDur) % cycleDur;
+                        if (bounded > flightDur + 100) return d.path[d.path.length - 1];
+                        expectedT = Math.min(t0_abs + bounded, tEnd_abs);
+                    }
+
+                    const index = binarySearchTimestamp(times, expectedT);
                     if (index <= 0) return d.path[0];
                     if (index >= times.length) return d.path[d.path.length - 1];
 
-                    const t0 = times[index - 1];
-                    const t1 = times[index];
+                    const ts0 = times[index - 1];
+                    const ts1 = times[index];
                     const p0 = d.path[index - 1];
                     const p1 = d.path[index];
-                    const ratio = (t - t0) / (t1 - t0);
+                    const ratio = (expectedT - ts0) / (ts1 - ts0);
                     return [
                         p0[0] + (p1[0] - p0[0]) * ratio,
                         p0[1] + (p1[1] - p0[1]) * ratio,
@@ -621,7 +729,7 @@ export function useMapLayers({
         ].filter(Boolean);
         return assembled;
     }, [staticLayers, uavFullTrajectoryLayer, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
-        roiCenterModelLayer, aStarExplorationLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer, visionMode]);
+        roiCenterModelLayer, aStarExplorationLayer, aStarPathHighlightLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer, visionMode]);
 
     return { layers };
 }

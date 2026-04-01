@@ -1,4 +1,4 @@
-﻿"""
+"""
 api/trajectories.py — 轨迹管理蓝图
 
 处理轨迹的批量生成、单条生成、查询和删除。
@@ -205,6 +205,8 @@ def single_generate():
                 "id": result.flight_id,
                 "path": result.path,
                 "timestamps": result.timestamps,
+                "explored_nodes": result.explored_nodes,
+                "nodes_expanded": result.nodes_expanded,
             }
         },
         "message": "单条生成完成"

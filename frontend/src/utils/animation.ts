@@ -100,9 +100,20 @@ export function updateActiveUAVsBuffer(
         const tEnd_absolute = times[times.length - 1];
         const flightDuration = tEnd_absolute - t0_absolute;
 
-        // 计算局部时间轴边界，映射到 [0, cycleDuration) 的无限循环轨道
-        const localT = (currentGlobalTime - t0_absolute) % cycleDuration;
-        const boundedLocalT = (localT + cycleDuration) % cycleDuration;
+        // 【核心修复】区分任务系统轨迹 vs 批量仿真轨迹
+        // 任务轨迹使用绝对时间（不循环），飞完即从渲染缓冲区中移除
+        const isTaskTraj = !!(traj as any).fromTaskSystem;
+        let boundedLocalT: number;
+
+        if (isTaskTraj) {
+            // 任务轨迹：直接用绝对时间差，不取模
+            boundedLocalT = currentGlobalTime - t0_absolute;
+        } else {
+            // 仿真轨迹：循环取模，形成无限循环演示效果
+            const localT = (currentGlobalTime - t0_absolute) % cycleDuration;
+            boundedLocalT = (localT + cycleDuration) % cycleDuration;
+        }
+
         const trailLength = 100; // 拖尾渲染冗余时间，保证渐隐彻底完成才卸载模型
 
         // 如果无人机在当前局部周期内应处于“现身”状态

@@ -7,6 +7,12 @@ export interface UAVPath {
     pathLat?: Float32Array;
     pathAlt?: Float32Array;
     timestampsF64?: Float64Array;
+    // A* 搜索探索节点（用于可视化）
+    explored_nodes?: [number, number][];
+    nodes_expanded?: number;
+    // 任务系统标记
+    fromTaskSystem?: boolean;
+    _taskDbId?: string;
 }
 
 export interface CityData {

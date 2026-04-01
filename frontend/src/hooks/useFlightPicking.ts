@@ -14,9 +14,11 @@ interface UseFlightPickingParams {
     currentCity: string;
     isSandboxMode: boolean;
     showToast: ToastFn;
+    /** 任务创建成功后的回调，传入航线轨迹数据用于自动选中展示 A* 可视化 */
+    onFlightCreated?: (trajectory: any) => void;
 }
 
-export function useFlightPicking({ currentCity, isSandboxMode, showToast }: UseFlightPickingParams) {
+export function useFlightPicking({ currentCity, isSandboxMode, showToast, onFlightCreated }: UseFlightPickingParams) {
     const pickedFromRef = useRef<PickedPoint | null>(null);
     const [pickedFromDisplay, setPickedFromDisplay] = useState<PickedPoint | null>(null);
     const [pendingAiTask, setPendingAiTask] = useState<{ fromPoint: PickedPoint, toPoint: PickedPoint } | null>(null);

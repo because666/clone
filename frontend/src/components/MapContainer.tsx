@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect, lazy, Suspense } from 'react';
 import { precompileTrajectories } from '../hooks/useCityData';
-import { fetchTasks as fetchTasksApi } from '../services/api';
+import { fetchTasks as fetchTasksApi, completeTask as completeTaskApi } from '../services/api';
 import DeckGL from '@deck.gl/react';
 import { FlyToInterpolator } from '@deck.gl/core';
 import { Map as MapGL, type MapRef } from 'react-map-gl/maplibre';
@@ -140,7 +140,7 @@ export default function MapContainer() {
     } = useUAVAnimation(trajectories, timeRangeRef, currentTimeRef, deckRef, energyData, poiSensitive, windSpeed, pushAlert, trackingStateRef);
 
     // 【算法可视化】为被选中的航班生成 A* 搜索波纹扩散的时钟索引
-    const aStarProgressIndex = useAStarAnimation(
+    const { progressIndex: aStarProgressIndex, isComplete: aStarComplete, completionFade: aStarFade } = useAStarAnimation(
         selectedFlight?.explored_nodes,
         selectedFlight !== null, // 选中且有航路时激活动画
         2500 // 完整激波扩散耗时 (ms)
@@ -150,47 +150,107 @@ export default function MapContainer() {
         loadCityData("shenzhen", () => setSelectedFlight(null));
     }, [loadCityData]);
 
+    // 跟踪已自动完成的任务 ID，防止重复调用 completeTask API
+    const completedTaskIdsRef = useRef<Set<string>>(new Set());
+
     // 基于 SSE 获取并注入执行中的实时任务轨迹
     const fetchActiveTasks = useCallback(async () => {
         try {
-            // 【工程化改进 S1】统一 API 调用层，消除裸 fetch + 手动 token
             const tasks = await fetchTasksApi('EXECUTING');
             setTrajectories(prev => {
                 const existingIds = new Set(prev.map((t: any) => t.id));
-                // 【性能优化 P4-A】建立活跃 ID 索引，用于剔除无效僵尸航班
                 const activeIds = new Set(tasks.map((t: any) => t.trajectory_data?.id).filter(Boolean));
                 const newTrajs: any[] = [];
                 for (const task of tasks) {
                     if (task.trajectory_data && task.trajectory_data.id) {
                         if (!existingIds.has(task.trajectory_data.id)) {
-                                // 打上防误伤标记，以向系统申明它是受控单体，并在后端的生命周期中受审和回收
-                                const newTraj = { ...task.trajectory_data, fromTaskSystem: true };
-                                const offset = currentTimeRef.current;
-                                newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
-                                newTrajs.push(newTraj);
-                            }
+                            const newTraj = {
+                                ...task.trajectory_data,
+                                fromTaskSystem: true,
+                                _taskDbId: task.id, // 保存数据库 ID，用于自动完成
+                            };
+                            const offset = currentTimeRef.current;
+                            newTraj.timestamps = newTraj.timestamps.map((t: number) => t + offset);
+                            newTrajs.push(newTraj);
                         }
                     }
+                }
 
-                    // 【性能优化 P4-B】精准垃圾回收：剔除后端已完成的任务（失去连接状态），防止系统随时间运行产生内存溢出与渲染泄露
-                    // 核心修复点：只对派发系统(fromTaskSystem)的任务挥动屠刀，底层仿真基座的初始静态飞行物必须被保护
-                    const aliveTrajs = prev.filter((t: any) => !t.fromTaskSystem || activeIds.has(t.id));
+                const aliveTrajs = prev.filter((t: any) => !t.fromTaskSystem || activeIds.has(t.id));
 
-                    if (newTrajs.length > 0 || aliveTrajs.length !== prev.length) {
-                        // 【性能优化 P2-B】对 SSE 注入的新轨迹执行 SoA 预编译，
-                    // 确保动画循环中走 Float32Array 快路径而非 AoS 慢路径
+                if (newTrajs.length > 0 || aliveTrajs.length !== prev.length) {
                     if (newTrajs.length > 0) precompileTrajectories(newTrajs);
-                    return [...aliveTrajs, ...newTrajs];
+                    const merged = [...aliveTrajs, ...newTrajs];
+
+                    // 【核心修复】更新 timeRangeRef.max 以覆盖新注入轨迹的时间范围
+                    // 否则 TripsLayer 渲染不到偏移后的时间段，轨迹不可见
+                    let maxTs = timeRangeRef.current.max;
+                    for (const t of merged) {
+                        if (t.timestamps?.length) {
+                            const lastTs = t.timestamps[t.timestamps.length - 1];
+                            if (lastTs > maxTs) maxTs = lastTs;
+                        }
+                    }
+                    if (maxTs > timeRangeRef.current.max) {
+                        timeRangeRef.current = { min: 0, max: maxTs };
+                    }
+
+                    return merged;
                 }
                 return prev;
             });
         } catch (err) {
             console.warn('[MapContainer] 活跃任务获取失败:', err);
         }
-    }, [setTrajectories, currentTimeRef]);
+    }, [setTrajectories, currentTimeRef, timeRangeRef]);
 
     // 初始拉取
     useEffect(() => { fetchActiveTasks(); }, [fetchActiveTasks]);
+
+    // 【自动生命周期管理】定期检测已飞完的任务轨迹，自动调用后端 API 标记为 COMPLETED
+    // 使用真实墙钟时间而非动画时间，因为动画时间会循环重置
+    useEffect(() => {
+        // 记录每条任务轨迹的注入墙钟时刻和飞行时长
+        const taskTimings = new Map<string, { injectedAt: number; durationSim: number }>();
+        
+        for (const traj of trajectories) {
+            if (!traj.fromTaskSystem || !traj._taskDbId) continue;
+            const dbId = traj._taskDbId;
+            if (completedTaskIdsRef.current.has(dbId)) continue;
+            if (taskTimings.has(dbId)) continue;
+
+            const ts = traj.timestamps;
+            if (!ts || ts.length < 2) continue;
+            const simDuration = ts[ts.length - 1] - ts[0];
+            taskTimings.set(dbId, { injectedAt: Date.now(), durationSim: simDuration });
+        }
+
+        if (taskTimings.size === 0) return;
+
+        // ANIMATION_SPEED=0.016/frame, 60fps → ~0.96 sim-sec/real-sec
+        // 保险起见按 1x 速度估算：realDuration ≈ simDuration / animSpeedPerSec
+        const ANIM_SPEED_PER_SEC = 0.016 * 60; // ≈ 0.96
+        
+        const checkInterval = setInterval(() => {
+            const now = Date.now();
+            for (const [dbId, timing] of taskTimings) {
+                if (completedTaskIdsRef.current.has(dbId)) continue;
+                const realElapsed = (now - timing.injectedAt) / 1000; // 秒
+                const expectedRealDuration = timing.durationSim / ANIM_SPEED_PER_SEC;
+                
+                if (realElapsed > expectedRealDuration + 10) { // 10秒缓冲
+                    completedTaskIdsRef.current.add(dbId);
+                    completeTaskApi(dbId).then(() => {
+                        console.log(`[AutoComplete] 任务 ${dbId} 已自动标记完成`);
+                    }).catch(err =>
+                        console.warn(`[AutoComplete] 标记任务 ${dbId} 完成失败:`, err)
+                    );
+                }
+            }
+        }, 5000);
+
+        return () => clearInterval(checkInterval);
+    }, [trajectories]);
 
     // 【架构优化 P1-2】使用全局单例 SSE 连接，一个 tab 只维护一条长连接
     useSSESubscription(fetchActiveTasks);
@@ -198,35 +258,53 @@ export default function MapContainer() {
     const handleFocusFlight = useCallback((flight: any) => {
         if (!flight || !flight.path || !flight.timestamps) return;
 
-        setSelectedFlight(flight);
+        // 【核心修复】从活跃轨迹列表中查找匹配的实际轨迹（含偏移后的时间戳）
+        // 审批 Tab 传入的 trajectory_data 使用原始时间戳，与动画时间不同步
+        // 导致黄色定位盘定位到错误位置
+        let actualFlight = flight;
+        if (flight.id) {
+            const matched = trajectories.find((t: any) => t.id === flight.id);
+            if (matched) {
+                // 使用动画系统中的实际轨迹，但保留 explored_nodes（可能只在任务数据中有）
+                actualFlight = {
+                    ...matched,
+                    explored_nodes: matched.explored_nodes || flight.explored_nodes,
+                };
+            }
+        }
+
+        setSelectedFlight(actualFlight);
         // 开启硬锁定跟拍模式
-        trackingStateRef.current = { isTracking: true, lockedFlight: flight };
+        trackingStateRef.current = { isTracking: true, lockedFlight: actualFlight };
+
+        // 【体验优化】有 A* 探索数据时自动进入航班视觉模式，让可视化更突出
+        if (actualFlight.explored_nodes?.length) {
+            setVisionMode('uav');
+        }
 
         const t = currentTimeRef.current;
-        const times = flight.timestamps;
-        // 【性能优化】O(logN) 二分搜索替代 O(N) findIndex
+        const times = actualFlight.timestamps;
         const index = binarySearchTimestamp(times, t);
 
         let lon, lat;
         if (index > 0 && index < times.length) {
             const t0 = times[index - 1];
             const t1 = times[index];
-            const p0 = flight.path[index - 1];
-            const p1 = flight.path[index];
+            const p0 = actualFlight.path[index - 1];
+            const p1 = actualFlight.path[index];
             const ratio = (t - t0) / (t1 - t0);
             lon = p0[0] + (p1[0] - p0[0]) * ratio;
             lat = p0[1] + (p1[1] - p0[1]) * ratio;
         } else if (index === -1) {
-            lon = flight.path[flight.path.length - 1][0];
-            lat = flight.path[flight.path.length - 1][1];
+            lon = actualFlight.path[actualFlight.path.length - 1][0];
+            lat = actualFlight.path[actualFlight.path.length - 1][1];
         } else {
-            lon = flight.path[0][0];
-            lat = flight.path[0][1];
+            lon = actualFlight.path[0][0];
+            lat = actualFlight.path[0][1];
         }
 
         setViewState((prev: any) => {
             const targetZoom = Math.max(prev.zoom, 14.5);
-            // 计算右偏置距：使无人机显示在屏幕中右侧，避免被左侧侧边栏遮挡
             const lngOffset = 0.05 * Math.pow(2, 13 - targetZoom);
             return {
                 ...prev,
@@ -237,7 +315,7 @@ export default function MapContainer() {
                 transitionInterpolator: new FlyToInterpolator({ speed: 1.2 })
             };
         });
-    }, [currentTimeRef]);
+    }, [currentTimeRef, trajectories, setVisionMode]);
 
     const handleViewStateChange = useCallback(({ viewState: nextViewState, interactionState }: any) => {
         const { longitude, latitude, zoom, pitch, bearing } = nextViewState;
@@ -294,6 +372,7 @@ export default function MapContainer() {
         selectedFlight,
         pickedFromDisplay,
         currentTimeRef,
+        timeRangeRef,
         sandboxCenters,
         sandboxRadius,
         radarSweepActive,
@@ -303,6 +382,8 @@ export default function MapContainer() {
         handleDemandPick,
         visionMode,
         aStarProgressIndex,
+        aStarComplete,
+        aStarFade,
     });
 
     const handleRetryLoad = useCallback(() => {

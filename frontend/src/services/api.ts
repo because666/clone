@@ -112,6 +112,11 @@ export async function updateTaskStatus(taskId: string, newStatus: string): Promi
     });
 }
 
+/** 系统自动标记任务为已完成 */
+export async function completeTask(taskId: string): Promise<ApiResponse> {
+    return updateTaskStatus(taskId, 'COMPLETED');
+}
+
 // ======================== ROI / Analysis API ========================
 
 export interface RoiResult {

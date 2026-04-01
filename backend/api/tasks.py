@@ -178,12 +178,22 @@ def tasks_stream():
 def update_task_status(task_id):
     body = request.get_json(force=True, silent=True) or {}
     new_status = body.get("status")
-    if new_status not in ['PENDING', 'APPROVED', 'EXECUTING', 'COMPLETED', 'REJECTED']:
-        return jsonify({"code": 40001, "data": None, "message": "无效的状态值"}), 400
+    # 简化的状态流转：PENDING → EXECUTING（批准即执行）, EXECUTING → COMPLETED（系统自动）, PENDING → REJECTED
+    if new_status not in ['EXECUTING', 'COMPLETED', 'REJECTED']:
+        return jsonify({"code": 40001, "data": None, "message": "无效的状态值，允许: EXECUTING, COMPLETED, REJECTED"}), 400
 
     task = Task.query.get(task_id)
     if not task:
         return jsonify({"code": 40400, "data": None, "message": "任务不存在"}), 404
+
+    # 状态流转合法性校验
+    valid_transitions = {
+        'PENDING': ['EXECUTING', 'REJECTED'],
+        'EXECUTING': ['COMPLETED'],
+    }
+    allowed = valid_transitions.get(task.status, [])
+    if new_status not in allowed:
+        return jsonify({"code": 40001, "data": None, "message": f"不允许从 {task.status} 转到 {new_status}"}), 400
 
     task.status = new_status
     db.session.commit()
