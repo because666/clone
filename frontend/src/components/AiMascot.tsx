@@ -1,5 +1,5 @@
 import { Bot } from 'lucide-react';
-import { useState, useRef, useEffect, MouseEvent as ReactMouseEvent } from 'react';
+import { useState, useRef, useEffect, type MouseEvent as ReactMouseEvent } from 'react';
 
 // 将动画样式抽取为文件级常量，阻断每一次渲染组件的深层 diff 雪崩代价
 const STYLE_FLOAT = { animation: 'mascotFloat 4s ease-in-out infinite' };
