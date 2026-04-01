@@ -1,4 +1,5 @@
 import { Bot } from 'lucide-react';
+import { useState, useRef, useEffect, MouseEvent as ReactMouseEvent } from 'react';
 
 // 将动画样式抽取为文件级常量，阻断每一次渲染组件的深层 diff 雪崩代价
 const STYLE_FLOAT = { animation: 'mascotFloat 4s ease-in-out infinite' };
@@ -6,8 +7,59 @@ const STYLE_ORBIT_1 = { animation: 'orbitBounce 3s ease-in-out infinite alternat
 const STYLE_ORBIT_2 = { animation: 'orbitBounce 2.5s ease-in-out infinite alternate-reverse' };
 
 export default function AiMascot({ isRightPanelOpen }: { isRightPanelOpen?: boolean }) {
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    
+    const dragStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null);
+
+    const handleMouseDown = (e: ReactMouseEvent) => {
+        if (e.button !== 0) return; // 只响应左键
+        e.preventDefault(); // 防止默认拖拽行为（如拖拽图片或选中文字）
+        setIsDragging(true);
+        dragStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            initX: position.x,
+            initY: position.y
+        };
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.startX;
+            const dy = e.clientY - dragStartRef.current.startY;
+            
+            setPosition({
+                x: dragStartRef.current.initX + dx,
+                y: dragStartRef.current.initY + dy
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
     return (
-        <div className={`fixed top-9 z-[60] pointer-events-auto cursor-help group transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${isRightPanelOpen ? 'right-[700px]' : 'right-[360px]'}`}>
+        <div 
+            className={`fixed top-9 z-[60] pointer-events-auto group touch-none select-none 
+                ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} 
+                ${isDragging ? '' : 'transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]'} 
+                ${isRightPanelOpen ? 'right-[700px]' : 'right-[360px]'}`}
+            style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+            onMouseDown={handleMouseDown}
+        >
             {/* 核心容器组件 - 包含悬浮效果 */}
             <div className="relative w-16 h-16 flex items-center justify-center transition-transform hover:scale-110 duration-300"
                 style={STYLE_FLOAT}>
@@ -38,14 +90,16 @@ export default function AiMascot({ isRightPanelOpen }: { isRightPanelOpen?: bool
 
                 {/* 底部名牌 */}
                 <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap flex flex-col items-center">
-                    <div className="bg-white/85 backdrop-blur-xl px-3 py-0.5 rounded-full border border-white shadow-md ring-1 ring-slate-900/5 flex items-center gap-1.5 opacity-95 group-hover:opacity-100 group-hover:-translate-y-0.5 transition-all duration-300">
+                    <div className="bg-white/85 backdrop-blur-xl px-3 py-0.5 rounded-full border border-white shadow-md ring-1 ring-slate-900/5 flex items-center gap-1.5 opacity-95 group-hover:opacity-100 group-hover:-translate-y-0.5 transition-all duration-300 pointer-events-none">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.6)]" />
                         <span className="text-[10px] font-black text-slate-700 tracking-wider">QWEN</span>
                     </div>
                 </div>
 
                 {/* Hover 显示的 AI 对话提示气泡 (改到左侧展开) */}
-                <div className="absolute top-1/2 right-full mr-6 -translate-y-1/2 w-[220px] opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 origin-right pointer-events-none">
+                <div className="absolute top-1/2 right-full mr-6 -translate-y-1/2 w-[220px] 
+                    opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 
+                    transition-all duration-300 origin-right pointer-events-none">
                     <div className="bg-white/50 backdrop-blur-xl p-4 rounded-2xl border border-white/60 shadow-lg relative">
                         <div className="absolute inset-0 bg-gradient-to-br from-slate-900/5 to-transparent rounded-2xl pointer-events-none"></div>
                         {/* 左侧向右的指向小三角 */}
