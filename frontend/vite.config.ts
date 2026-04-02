@@ -36,6 +36,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     // 【性能优化 P1-C】面向现代浏览器编译，利用原生语法减少 polyfill 体积
     target: 'es2022',
+    // 【性能优化 P2-11】生产环境关闭 sourcemap，减少构建体积和泄露风险
+    sourcemap: false,
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         // 核心：基于包特性的手动分包策略 (Manual Chunks)

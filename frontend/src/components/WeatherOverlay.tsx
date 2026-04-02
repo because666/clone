@@ -31,7 +31,7 @@ const WeatherOverlay = memo(function WeatherOverlay() {
             if (weather === 'rainy') count = 400;
             else if (weather === 'snowy') count = 150;
             else if (weather === 'hailing') count = 100;
-            else if (weather === 'cloudy') count = 8; // Fewer but larger clouds
+            else if (weather === 'cloudy') count = 8;
 
             for (let i = 0; i < count; i++) {
                 particles.push({
@@ -39,8 +39,8 @@ const WeatherOverlay = memo(function WeatherOverlay() {
                     y: Math.random() * h,
                     l: Math.random() * 25 + 15,
                     v: Math.random() * 5 + 8,
-                    r: weather === 'cloudy' ? Math.random() * 250 + 200 : Math.random() * 3 + 1, // Larger clouds
-                    o: weather === 'cloudy' ? Math.random() * 0.2 + 0.15 : Math.random() * 0.5 + 0.3, // Higher core opacity
+                    r: weather === 'cloudy' ? Math.random() * 250 + 200 : Math.random() * 3 + 1,
+                    o: weather === 'cloudy' ? Math.random() * 0.2 + 0.15 : Math.random() * 0.5 + 0.3,
                     speed: Math.random() * 0.4 + 0.1
                 });
             }

@@ -152,11 +152,15 @@ class NoFlyZoneIndex:
         return [z for z in self._nearby_zones(lat, lon, max_r)
                 if z.contains_point(lat, lon, buffer_m)]
 
-    def segment_intersects_any(self, p1_lat, p1_lon, p2_lat, p2_lon, buffer_m: float = 0.0) -> bool:
-        """判断线段是否与任意禁飞区相交"""
+    def segment_intersects_any(self, p1_lat, p1_lon, p2_lat, p2_lon, buffer_m: float = 0.0, segment_half_len: float = -1.0) -> bool:
+        """判断线段是否与任意禁飞区相交
+        
+        Args:
+            segment_half_len: 【性能优化 P2-10】可选预计算半长（米），避免在热路径中重复调用 haversine_m
+        """
         mid_lat = (p1_lat + p2_lat) / 2
         mid_lon = (p1_lon + p2_lon) / 2
-        half_len = haversine_m(p1_lat, p1_lon, p2_lat, p2_lon) / 2
+        half_len = segment_half_len if segment_half_len >= 0 else haversine_m(p1_lat, p1_lon, p2_lat, p2_lon) / 2
         max_r = self.max_radius_m + buffer_m
         for z in self._nearby_zones(mid_lat, mid_lon, max_r + half_len):
             if z.intersects_segment(p1_lat, p1_lon, p2_lat, p2_lon, buffer_m):

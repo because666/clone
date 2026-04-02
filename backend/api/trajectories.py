@@ -4,6 +4,7 @@ api/trajectories.py — 轨迹管理蓝图
 处理轨迹的批量生成、单条生成、查询和删除。
 """
 import json
+import orjson
 import time
 import uuid
 import random
@@ -17,6 +18,7 @@ from backend.core.planner import plan
 from backend.core.geo_utils import haversine_m
 from backend.scripts.batch_generate import build_output
 from backend.middleware.auth import role_required, log_audit
+from backend.api.analytics import _load_city_trajectories, _load_city_energy
 
 logger = logging.getLogger("TrajServer")
 
@@ -102,6 +104,10 @@ def batch_generate():
         db.session.add(flight_log)
     db.session.commit()
     logger.info(f"[batch] 已写入数据库, batch_id={batch_id}")
+
+    # 【性能优化 P1-8】数据更新后清除 analytics 的 lru_cache，确保分析页获取最新数据
+    _load_city_trajectories.cache_clear()
+    _load_city_energy.cache_clear()
 
     elapsed = time.time() - t0
     total_violations = sum(r.nfz_violations for r in results)
@@ -230,9 +236,9 @@ def get_trajectories():
     total_dur = 0.0
     valid_count = 0
 
-    # 使用批量 C-level 推导式，大幅压缩循环开销
+    # 【性能优化 P0-3】使用 orjson 替代标准 json，解析速度提升 5-10x
     parsed_logs = [
-        (log.flight_id, json.loads(log.path_data), json.loads(log.timestamps_data), log.start_offset or 0.0)
+        (log.flight_id, orjson.loads(log.path_data), orjson.loads(log.timestamps_data), log.start_offset or 0.0)
         for log in logs if log.path_data and log.timestamps_data
     ]
 

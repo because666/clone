@@ -6,6 +6,12 @@ import AnimationWorker from '../workers/animation.worker?worker';
 
 const ANIMATION_SPEED = 0.016;
 
+// 【性能优化 P0-1】冲突检测的模块级复用容器，消除每帧 new Map/Set 的 GC 尖刺
+const _conflictGrid = new Map<number, number[]>();
+const _conflictChecked = new Set<number>();
+const _bucketPool: number[][] = [];
+let _bucketPoolPtr = 0;
+
 // 业务基数模拟常量：使前端演示脱离封闭的短时截面数据集束缚，更贴近真实大屏
 const CITY_AIRSPACE_CAPACITY = 1200;  // 模拟南山区低空网络设计最大瞬时并发承载能力
 const BASE_CUMULATIVE_FLIGHTS = 8440; // 模拟从当天凌晨至演示启动前，已经完成的历史基础订单累积量
@@ -368,21 +374,35 @@ export function useUAVAnimation(
             const CONFLICT_DANGER_DIST_SQ = 80 * 80;   // 80m 红色碰撞风险
             const CONFLICT_ALT_THRESHOLD = 30;          // 高度差阈值（米）
 
-            // 构建当前帧 UAV 位置的临时空间哈希（帧内构建帧内丢弃，无跨帧状态）
-            const uavGrid = new Map<number, number[]>();
+            // 【性能优化 P0-1】模块级容器复用：clear() 替代 new，消除每帧 Map/Set 堆分配导致的 GC 尖刺
+            _conflictGrid.clear();
+            _conflictChecked.clear();
+            _bucketPoolPtr = 0;
+
             for (let u = 0; u < activeUAVCount; u++) {
                 const gx = (uavPositionsBuffer[u * 3] / CONFLICT_GRID_SIZE) | 0;
                 const gy = (uavPositionsBuffer[u * 3 + 1] / CONFLICT_GRID_SIZE) | 0;
                 const key = gx * 100000 + gy;
-                if (!uavGrid.has(key)) uavGrid.set(key, []);
-                uavGrid.get(key)!.push(u);
+                let bucket = _conflictGrid.get(key);
+                if (!bucket) {
+                    // 对象池：优先复用已有桶数组，避免每帧 new Array
+                    if (_bucketPoolPtr < _bucketPool.length) {
+                        bucket = _bucketPool[_bucketPoolPtr];
+                        bucket.length = 0;
+                    } else {
+                        bucket = [];
+                        _bucketPool.push(bucket);
+                    }
+                    _bucketPoolPtr++;
+                    _conflictGrid.set(key, bucket);
+                }
+                bucket.push(u);
             }
 
             let pairCount = 0;
             const maxPairs = 200;
-            const checked = new Set<number>(); // 避免重复检测同一对
 
-            for (const [_key, indices] of uavGrid) {
+            for (const [_key, indices] of _conflictGrid) {
                 if (pairCount >= maxPairs) break;
                 // 同 bin 内两两检测
                 for (let a = 0; a < indices.length && pairCount < maxPairs; a++) {
@@ -394,8 +414,8 @@ export function useUAVAnimation(
                     for (let b = a + 1; b < indices.length && pairCount < maxPairs; b++) {
                         const bi = indices[b];
                         const pairKey = ai < bi ? ai * 100000 + bi : bi * 100000 + ai;
-                        if (checked.has(pairKey)) continue;
-                        checked.add(pairKey);
+                        if (_conflictChecked.has(pairKey)) continue;
+                        _conflictChecked.add(pairKey);
 
                         const bz = uavPositionsBuffer[bi * 3 + 2];
                         const altDiff = Math.abs(az - bz);

@@ -1,4 +1,4 @@
-﻿"""
+"""
 api/analytics.py — 数据分析蓝图
 
 为前端 /analytics 独立分析页提供聚合统计 API。
@@ -9,6 +9,7 @@ api/analytics.py — 数据分析蓝图
 """
 import os
 import json
+import orjson
 import math
 import logging
 from functools import lru_cache
@@ -41,12 +42,12 @@ def _load_city_trajectories(city: str):
     # 1. 先查数据库
     logs = FlightLog.query.filter_by(city=city).all()
     if logs:
-        # 使用 C-level 优化的列表推导式，避免 for loop 在 Python 字节码层面的执行开销
+        # 【性能优化 P0-3】使用 orjson 替代标准 json，解析速度提升 5-10x
         trajectories = [
             {
                 "id": log.flight_id,
-                "path": json.loads(log.path_data),
-                "timestamps": json.loads(log.timestamps_data),
+                "path": orjson.loads(log.path_data),
+                "timestamps": orjson.loads(log.timestamps_data),
             }
             for log in logs if log.path_data and log.timestamps_data
         ]

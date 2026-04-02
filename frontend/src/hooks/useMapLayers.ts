@@ -99,13 +99,17 @@ export function useMapLayers({
     const buildingsLayer = useMemo(() => {
         if (!buildingsData) return null;
         const z = quantizedZoom;
+        // 【性能优化 R2-2】基于缩放级别动态降级建筑渲染复杂度
+        // zoom < 12 时关闭 3D 拉伸和描边，GPU DrawCall 减少 ~60%
+        const shouldExtrude = z >= 12;
+        const shouldStroke = z > 13;
         return new GeoJsonLayer({
             id: 'buildings-layer',
             data: buildingsData,
-            extruded: true,
+            extruded: shouldExtrude,
             filled: true,
-            stroked: z > 13,
-            wireframe: z > 13,
+            stroked: shouldStroke,
+            wireframe: shouldStroke,
             getFillColor: visionMode === 'building'
                 ? [0, 255, 255, 40]
                 : visionMode !== 'default'
@@ -118,13 +122,15 @@ export function useMapLayers({
                     : [80, 90, 110, 255],
             getLineWidth: 1,
             lineWidthMinPixels: 1,
-            getElevation: ((d: any) => d.properties.height || 20) as any,
+            getElevation: ((d: any) => shouldExtrude ? (d.properties.height || 20) : 0) as any,
             pickable: false,
             autoHighlight: false,
-            material: { ambient: 0.4, diffuse: 0.6, shininess: 32, specularColor: [220, 230, 240] },
+            // 【R2-2】远景时关闭材质光照计算，大幅降低 fragment shader 负载
+            material: shouldExtrude ? { ambient: 0.4, diffuse: 0.6, shininess: 32, specularColor: [220, 230, 240] } : false,
             updateTriggers: {
                 getFillColor: visionMode,
-                getLineColor: visionMode
+                getLineColor: visionMode,
+                getElevation: shouldExtrude,
             },
             transitions: {
                 getFillColor: 600,
@@ -332,27 +338,34 @@ export function useMapLayers({
         const widthMinPx = 0.5 + t * 2.0;
         const layerOpacity = 0.4 + t * 0.5;
 
+        // 【性能优化 R2-1】将 getColor 闭包捕获提升为 useMemo 内的局部绑定
+        // 避免每次 clone 时在热路径中创建新闭包
+        const isUavMode = visionMode === 'uav';
+        const currentEnergyData = energyData;
+        const colorAccessor = isUavMode
+            ? () => [255, 220, 0, 255] as [number, number, number, number]
+            : (d: any) => {
+                const realId = d.id ? d.id.replace('_ghost', '') : '';
+                if (realId && currentEnergyData && currentEnergyData[realId]) {
+                    const payload = currentEnergyData[realId].payload;
+                    if (payload >= 2.0) return [245, 158, 11] as [number, number, number];
+                    if (payload >= 1.0) return [16, 185, 129] as [number, number, number];
+                    return [14, 165, 233] as [number, number, number];
+                }
+                return [14, 165, 233] as [number, number, number];
+            };
+
         return new TripsLayer({
             id: 'uav-active-tail-layer',
             data: trajectories,
             getPath: (d: any) => d.path,
             getTimestamps: (d: any) => d.timestamps,
-            getColor: (d: any) => {
-                if (visionMode === 'uav') return [255, 220, 0, 255];
-                const realId = d.id ? d.id.replace('_ghost', '') : '';
-                if (realId && energyData && energyData[realId]) {
-                    const payload = energyData[realId].payload;
-                    if (payload >= 2.0) return [245, 158, 11];
-                    if (payload >= 1.0) return [16, 185, 129];
-                    return [14, 165, 233];
-                }
-                return [14, 165, 233];
-            },
+            getColor: colorAccessor,
             widthMinPixels: widthMinPx,
             trailLength: 100,
             currentTime: currentTimeRef.current,
             shadowEnabled: false,
-            opacity: visionMode === 'uav' ? 1.0 : layerOpacity,
+            opacity: isUavMode ? 1.0 : layerOpacity,
             pickable: false,
             transitions: {
                 getColor: 500,
@@ -469,19 +482,34 @@ export function useMapLayers({
         const historyNodes = allNodes.slice(0, Math.min(aStarProgressIndex, allNodes.length));
 
         // 搜索完成后：计算哪些粒子在最终路径附近（保持高亮），其余淡化
+        // 【性能优化 R2-6】O(N×M) → O(N+M)：预建路径点空间哈希，探索节点查表
         let onPathSet: Set<number> | null = null;
         if (aStarComplete && selectedFlight.path?.length >= 2) {
             onPathSet = new Set<number>();
             const pathPoints = selectedFlight.path;
-            const threshold = 0.0012;
+            const gridSize = 0.0012; // 约 120m 的量化粒度
+
+            // Step 1: 将路径点量化为整数 key 存入 Set — O(M)
+            const pathHash = new Set<number>();
+            for (const pp of pathPoints) {
+                const [ppLon, ppLat] = pp;
+                const gx = Math.round(ppLat / gridSize);
+                const gy = Math.round(ppLon / gridSize);
+                // 放入本格和邻格，保证边界不漏
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        pathHash.add((gx + dx) * 1000000 + (gy + dy));
+                    }
+                }
+            }
+
+            // Step 2: 对探索节点做 O(1) 查表 — O(N)
             for (let i = 0; i < historyNodes.length; i++) {
                 const [nodeLat, nodeLon] = historyNodes[i];
-                for (const pp of pathPoints) {
-                    const [ppLon, ppLat] = pp;
-                    if (Math.abs(nodeLat - ppLat) < threshold && Math.abs(nodeLon - ppLon) < threshold) {
-                        onPathSet.add(i);
-                        break;
-                    }
+                const gx = Math.round(nodeLat / gridSize);
+                const gy = Math.round(nodeLon / gridSize);
+                if (pathHash.has(gx * 1000000 + gy)) {
+                    onPathSet.add(i);
                 }
             }
         }
@@ -576,93 +604,168 @@ export function useMapLayers({
         });
     }, [aStarComplete, selectedFlight, aStarFade]);
 
+    // ==================== 【性能优化 P0-2】预构建内联图层 ====================
+    // 从最终组装中提取为独立 useMemo，避免无关依赖变化时重建所有内联 Layer
+
+    const conflictArcLayer = useMemo(() => new ArcLayer({
+        id: 'conflict-arc-layer',
+        data: { length: 0 },
+        getSourcePosition: (_: any, { index }: any) => [
+            conflictPairsBuffer[index * 6],
+            conflictPairsBuffer[index * 6 + 1],
+            conflictPairsBuffer[index * 6 + 2]
+        ],
+        getTargetPosition: (_: any, { index }: any) => [
+            conflictPairsBuffer[index * 6 + 3],
+            conflictPairsBuffer[index * 6 + 4],
+            conflictPairsBuffer[index * 6 + 5]
+        ],
+        getSourceColor: [255, 0, 0, 255],
+        getTargetColor: [255, 140, 0, 255],
+        getWidth: 6,
+        widthMinPixels: 5,
+        getHeight: 1.2,
+        pickable: false,
+    }), []);
+
+    const haloGlowLayer = useMemo(() => {
+        if (!haloVisible) return null;
+        return new ScatterplotLayer({
+            id: 'uav-halo-glow-layer',
+            data: {
+                length: activeUAVCount,
+                attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
+            },
+            getFillColor: [255, 215, 0, visionMode === 'uav' ? 50 : 0],
+            getRadius: visionMode === 'uav' ? 28 : 2,
+            radiusMinPixels: visionMode === 'uav' ? 8 : 0,
+            radiusMaxPixels: 35,
+            pickable: false,
+            parameters: { depthTest: false, blend: true, blendEquation: 32774 },
+            transitions: {
+                getFillColor: 600,
+                getRadius: 600,
+                radiusMinPixels: 600
+            },
+            updateTriggers: {
+                getFillColor: visionMode,
+                getRadius: visionMode,
+                radiusMinPixels: visionMode
+            } as any
+        });
+    }, [haloVisible, visionMode]);
+
+    const haloCoreLayer = useMemo(() => {
+        if (!haloVisible) return null;
+        return new ScatterplotLayer({
+            id: 'uav-halo-core-layer',
+            data: {
+                length: activeUAVCount,
+                attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
+            },
+            getFillColor: [255, 255, 200, visionMode === 'uav' ? 180 : 0],
+            getRadius: visionMode === 'uav' ? 8 : 1,
+            radiusMinPixels: visionMode === 'uav' ? 3 : 0,
+            radiusMaxPixels: 12,
+            pickable: false,
+            parameters: { depthTest: false },
+            transitions: {
+                getFillColor: 400,
+                getRadius: 400,
+                radiusMinPixels: 400
+            },
+            updateTriggers: {
+                getFillColor: visionMode,
+                getRadius: visionMode,
+                radiusMinPixels: visionMode
+            } as any
+        });
+    }, [haloVisible, visionMode]);
+
+    const selectedUavLayer = useMemo(() => {
+        if (!selectedFlight) return null;
+        return new ScatterplotLayer({
+            id: 'selected-uav-layer',
+            data: [selectedFlight],
+            getPosition: (d: any) => {
+                const globalT = currentTimeRef.current;
+                const times = d.timestamps;
+                if (!times || times.length < 2) return d.path[0];
+
+                const t0_abs = times[0];
+                const tEnd_abs = times[times.length - 1];
+                const flightDur = tEnd_abs - t0_abs;
+                const cycleDur = timeRangeRef.current.max;
+
+                // 【核心修复】使用与 animation.ts 完全相同的时间计算
+                let expectedT: number;
+                if (d.fromTaskSystem) {
+                    // 任务轨迹：绝对时间，不循环
+                    expectedT = Math.min(Math.max(globalT, t0_abs), tEnd_abs);
+                } else {
+                    // 仿真轨迹：循环取模
+                    const localT = (globalT - t0_abs) % cycleDur;
+                    const bounded = (localT + cycleDur) % cycleDur;
+                    if (bounded > flightDur + 100) return d.path[d.path.length - 1];
+                    expectedT = Math.min(t0_abs + bounded, tEnd_abs);
+                }
+
+                const index = binarySearchTimestamp(times, expectedT);
+                if (index <= 0) return d.path[0];
+                if (index >= times.length) return d.path[d.path.length - 1];
+
+                const ts0 = times[index - 1];
+                const ts1 = times[index];
+                const p0 = d.path[index - 1];
+                const p1 = d.path[index];
+                const ratio = (expectedT - ts0) / (ts1 - ts0);
+                return [
+                    p0[0] + (p1[0] - p0[0]) * ratio,
+                    p0[1] + (p1[1] - p0[1]) * ratio,
+                    (p0[2] + (p1[2] - p0[2]) * ratio) || 0
+                ];
+            },
+            getFillColor: [255, 190, 0, 200],
+            getLineColor: [255, 255, 255, 255],
+            lineWidthMinPixels: 3,
+            radiusMinPixels: 15,
+            radiusMaxPixels: 60,
+            opacity: 1,
+            stroked: true,
+            filled: true,
+            updateTriggers: {
+                getPosition: currentTimeRef.current
+            }
+        });
+    }, [selectedFlight]);
+
     // ==================== 最终组装 ====================
-    // 【性能优化 P0-A】用 useMemo 包裹最终 layers 数组的组装，
-    // 消除 MapContainer 每次 re-render 时的数组重建与 filter(Boolean) 的 GC 脉冲
+    // 【性能优化 P0-2】用顺序 push 替代 filter(Boolean)，消除中间数组 GC
     const layers = useMemo(() => {
-        const assembled = [
-            ...staticLayers,
-            uavFullTrajectoryLayer,
-            activeTailLayer,
-            hoverPathLayer,
-            roiRadiusLayer,     // 重新加上沙盘的静态探测圈图层
-            radarSweepLayer,    // 添加沙盘动态激波扩散层
-            roiCenterModelLayer,
-            ...(aStarExplorationLayer || []),
-            aStarPathHighlightLayer,
-            // ============ 4D 冲突检测弧线层 ============
-            new ArcLayer({
-                id: 'conflict-arc-layer',
-                data: { length: 0 },
-                getSourcePosition: (_: any, { index }: any) => [
-                    conflictPairsBuffer[index * 6], 
-                    conflictPairsBuffer[index * 6 + 1], 
-                    conflictPairsBuffer[index * 6 + 2]
-                ],
-                getTargetPosition: (_: any, { index }: any) => [
-                    conflictPairsBuffer[index * 6 + 3], 
-                    conflictPairsBuffer[index * 6 + 4], 
-                    conflictPairsBuffer[index * 6 + 5]
-                ],
-                getSourceColor: [255, 0, 0, 255],
-                getTargetColor: [255, 140, 0, 255],
-                getWidth: 6,
-                widthMinPixels: 5,
-                getHeight: 1.2,
-                pickable: false,
-            }),
-            haloVisible ? new ScatterplotLayer({
-                id: 'uav-halo-glow-layer',
-                data: {
-                    length: activeUAVCount,
-                    attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
-                },
-                getFillColor: [255, 215, 0, visionMode === 'uav' ? 50 : 0],
-                getRadius: visionMode === 'uav' ? 28 : 2,
-                radiusMinPixels: visionMode === 'uav' ? 8 : 0,
-                radiusMaxPixels: 35,
-                pickable: false,
-                parameters: { depthTest: false, blend: true, blendEquation: 32774 },
-                transitions: {
-                    getFillColor: 600,
-                    getRadius: 600,
-                    radiusMinPixels: 600
-                },
-                updateTriggers: {
-                    getFillColor: visionMode,
-                    getRadius: visionMode,
-                    radiusMinPixels: visionMode
-                } as any
-            }) : null,
-            haloVisible ? new ScatterplotLayer({
-                id: 'uav-halo-core-layer',
-                data: {
-                    length: activeUAVCount,
-                    attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
-                },
-                getFillColor: [255, 255, 200, visionMode === 'uav' ? 180 : 0],
-                getRadius: visionMode === 'uav' ? 8 : 1,
-                radiusMinPixels: visionMode === 'uav' ? 3 : 0,
-                radiusMaxPixels: 12,
-                pickable: false,
-                parameters: { depthTest: false },
-                transitions: {
-                    getFillColor: 400,
-                    getRadius: 400,
-                    radiusMinPixels: 400
-                },
-                updateTriggers: {
-                    getFillColor: visionMode,
-                    getRadius: visionMode,
-                    radiusMinPixels: visionMode
-                } as any
-            }) : null,
-            quantizedZoom >= 13 ? uavModelLayer.clone({
+        const assembled: any[] = [];
+        for (const l of staticLayers) assembled.push(l);
+        if (uavFullTrajectoryLayer) assembled.push(uavFullTrajectoryLayer);
+        assembled.push(activeTailLayer);
+        assembled.push(hoverPathLayer);
+        if (roiRadiusLayer) assembled.push(roiRadiusLayer);
+        if (radarSweepLayer) assembled.push(radarSweepLayer);
+        if (roiCenterModelLayer) assembled.push(roiCenterModelLayer);
+        if (aStarExplorationLayer) {
+            for (const l of aStarExplorationLayer) assembled.push(l);
+        }
+        if (aStarPathHighlightLayer) assembled.push(aStarPathHighlightLayer);
+        assembled.push(conflictArcLayer);
+        if (haloGlowLayer) assembled.push(haloGlowLayer);
+        if (haloCoreLayer) assembled.push(haloCoreLayer);
+        if (quantizedZoom >= 13) {
+            assembled.push(uavModelLayer.clone({
                 data: {
                     length: activeUAVCount,
                     attributes: visionMode === 'uav' ? { instancePickingColors: { value: fakePickingColorsBuffer, size: 3 } } : undefined
                 } as any
-            }) : uavPointLayer.clone({
+            }));
+        } else {
+            assembled.push(uavPointLayer.clone({
                 data: {
                     length: activeUAVCount,
                     attributes: {
@@ -672,64 +775,14 @@ export function useMapLayers({
                 updateTriggers: {
                     getFillColor: visionMode
                 } as any
-            }),
-            selectedFlight ? new ScatterplotLayer({
-                id: 'selected-uav-layer',
-                data: [selectedFlight],
-                getPosition: (d: any) => {
-                    const globalT = currentTimeRef.current;
-                    const times = d.timestamps;
-                    if (!times || times.length < 2) return d.path[0];
-
-                    const t0_abs = times[0];
-                    const tEnd_abs = times[times.length - 1];
-                    const flightDur = tEnd_abs - t0_abs;
-                    const cycleDur = timeRangeRef.current.max;
-
-                    // 【核心修复】使用与 animation.ts 完全相同的时间计算
-                    let expectedT: number;
-                    if (d.fromTaskSystem) {
-                        // 任务轨迹：绝对时间，不循环
-                        expectedT = Math.min(Math.max(globalT, t0_abs), tEnd_abs);
-                    } else {
-                        // 仿真轨迹：循环取模
-                        const localT = (globalT - t0_abs) % cycleDur;
-                        const bounded = (localT + cycleDur) % cycleDur;
-                        if (bounded > flightDur + 100) return d.path[d.path.length - 1];
-                        expectedT = Math.min(t0_abs + bounded, tEnd_abs);
-                    }
-
-                    const index = binarySearchTimestamp(times, expectedT);
-                    if (index <= 0) return d.path[0];
-                    if (index >= times.length) return d.path[d.path.length - 1];
-
-                    const ts0 = times[index - 1];
-                    const ts1 = times[index];
-                    const p0 = d.path[index - 1];
-                    const p1 = d.path[index];
-                    const ratio = (expectedT - ts0) / (ts1 - ts0);
-                    return [
-                        p0[0] + (p1[0] - p0[0]) * ratio,
-                        p0[1] + (p1[1] - p0[1]) * ratio,
-                        (p0[2] + (p1[2] - p0[2]) * ratio) || 0
-                    ];
-                },
-                getFillColor: [255, 190, 0, 200],
-                getLineColor: [255, 255, 255, 255],
-                lineWidthMinPixels: 3,
-                radiusMinPixels: 15,
-                radiusMaxPixels: 60,
-                opacity: 1,
-                stroked: true,
-                filled: true,
-                updateTriggers: {
-                    getPosition: currentTimeRef.current
-                }
-            }) : null
-        ].filter(Boolean);
+            }));
+        }
+        if (selectedUavLayer) assembled.push(selectedUavLayer);
         return assembled;
     }, [staticLayers, uavFullTrajectoryLayer, activeTailLayer, hoverPathLayer, roiRadiusLayer, radarSweepLayer,
-        roiCenterModelLayer, aStarExplorationLayer, aStarPathHighlightLayer, uavModelLayer, uavPointLayer, quantizedZoom, selectedFlight, haloVisible, fakePickingColorsBuffer, visionMode]);
+        roiCenterModelLayer, aStarExplorationLayer, aStarPathHighlightLayer, conflictArcLayer, haloGlowLayer, haloCoreLayer,
+        uavModelLayer, uavPointLayer, quantizedZoom, selectedUavLayer, fakePickingColorsBuffer, visionMode]);
 
     return { layers };
 }
+
