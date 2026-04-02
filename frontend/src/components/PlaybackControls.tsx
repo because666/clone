@@ -29,8 +29,8 @@ const PlaybackControls = memo(function PlaybackControls({
     setVisionMode,
 }: PlaybackControlsProps) {
     return (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-            <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] px-8 py-5 flex items-center gap-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] relative">
+        <div className="absolute bottom-10 left-[396px] z-20 pointer-events-auto">
+            <div className="pointer-events-auto bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] px-8 py-5 flex items-center gap-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] relative">
                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-t from-slate-900/5 to-transparent pointer-events-none overflow-hidden" style={{ zIndex: 0 }}></div>
 
                 <button
