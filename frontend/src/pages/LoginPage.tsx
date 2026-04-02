@@ -56,12 +56,12 @@ const LoginPage: React.FC = () => {
         <div className="relative z-10 flex flex-col justify-center items-start h-full p-16">
           <h1 className="text-5xl font-black text-white leading-tight tracking-tight"
             style={SHADOW_1}>
-            城市低空物流基建规划<br/>与运行监控可视化平台
+            低空经济<br/>AI数字孪生引擎
           </h1>
           <div className="w-14 h-1 bg-white/50 rounded-full mt-7 mb-6" />
           <p className="text-white/70 text-base leading-relaxed max-w-lg"
             style={SHADOW_2}>
-            面向城市低空经济的多城市无人机航路规划、实时运行监控与能耗分析一体化平台。
+            基于AI数字孪生与时空流计算的低空经济智能调度中枢。
           </p>
           <div className="flex items-center gap-10 mt-10">
             <div>
@@ -88,7 +88,7 @@ const LoginPage: React.FC = () => {
           {/* 移动端标题 */}
           <div className="lg:hidden text-center mb-10">
             <h1 className="text-xl font-bold text-slate-800">AetherWeave</h1>
-            <p className="text-slate-400 text-xs mt-1">城市低空物流运维监控平台</p>
+            <p className="text-slate-400 text-xs mt-1">低空经济AI数字孪生引擎</p>
           </div>
 
           <h2 className="text-2xl font-bold text-slate-800">登录</h2>

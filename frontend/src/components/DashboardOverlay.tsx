@@ -217,7 +217,7 @@ const DashboardOverlay = memo(function DashboardOverlay({ onOpenAnalytics, onOpe
                 <div className="relative z-10">
                     <div className="flex justify-between items-center mb-1">
                         <h1 className="text-xl font-black tracking-tight text-slate-800">
-                            城市低空物流网络
+                            低空经济AI数字孪生引擎
                         </h1>
                         <div className="flex items-center gap-2 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
                             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>

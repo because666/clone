@@ -226,7 +226,7 @@ export default function MobilePage() {
                     </button>
                 </div>
 
-                <p className="text-[10px] text-slate-300 mt-8">城市低空物流运维平台 · 用户终端</p>
+                <p className="text-[10px] text-slate-300 mt-8">低空经济AI数字孪生引擎 · 用户终端</p>
             </div>
         );
     }

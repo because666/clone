@@ -327,7 +327,7 @@ export default function AboutPage() {
                 background: 'rgba(255,255,255,0.5)',
             }}>
                 <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
-                    苍穹织网 AetherWeave · 城市低空物流基建规划与运行监控可视化平台 · 4C 2026
+                    苍穹织网 AetherWeave · 低空经济AI数字孪生引擎 · 4C 2026
                 </p>
             </footer>
         </div>
