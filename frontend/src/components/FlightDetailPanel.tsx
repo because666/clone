@@ -1,4 +1,5 @@
-import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useMemo, memo } from 'react';
+import { useEnvironment } from '../contexts/EnvironmentContext';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 
 interface FlightDetailPanelProps {
@@ -8,20 +9,35 @@ interface FlightDetailPanelProps {
     setSelectedFlight: (flight: any) => void;
 }
 
-export default function FlightDetailPanel({
+export default memo(function FlightDetailPanel({
     selectedFlight,
     energyData,
     currentTimeRef,
     setSelectedFlight
 }: FlightDetailPanelProps) {
-    const { windSpeed } = useWindSpeed();
+    const { windSpeed } = useEnvironment();
+
+    // 【性能优化 P0-4】预计降落电量缓存：对同一架无人机的 battery 数组只遍历一次
+    // 使用 for 循环替代 filter() + Math.min(...spread)，消除每帧 GC 压力和大数组 stack overflow 风险
+    const rawMinBat = useMemo(() => {
+        if (!selectedFlight || !energyData) return 0;
+        const ed = energyData[selectedFlight.id];
+        if (!ed?.battery?.length) return 0;
+        const bat = ed.battery;
+        let min = Infinity;
+        for (let i = 0; i < bat.length; i++) {
+            const b = bat[i];
+            if (b > 0 && b < min) min = b;
+        }
+        return min === Infinity ? 0 : min;
+    }, [selectedFlight?.id, energyData]);
 
     if (!selectedFlight) return null;
 
     const windFactor = calcWindFactor(windSpeed);
 
     return (
-        <div className="absolute top-28 left-8 z-30 w-80 bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] text-slate-800 p-6 pointer-events-auto transition-all animate-in fade-in slide-in-from-left-4 overflow-hidden">
+        <div className="absolute top-[320px] left-6 z-30 w-80 bg-white/75 backdrop-blur-2xl border border-white/90 rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.12)] ring-1 ring-slate-900/5 text-slate-800 p-6 pointer-events-auto transition-all animate-in fade-in slide-in-from-left-4 overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-900/5 to-transparent pointer-events-none"></div>
             <div className="relative z-10">
                 <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-300/50">
@@ -51,9 +67,6 @@ export default function FlightDetailPanel({
                     const adjustedBat = Math.max(0, startBat - (startBat - rawBat) * windFactor);
                     const adjustedPwr = rawPwr * windFactor;
 
-                    // 预计降落电量（取全程最低电量并修正）
-                    const rawValidBattery = ed.battery.filter((b: number) => b > 0);
-                    const rawMinBat = rawValidBattery.length > 0 ? Math.min(...rawValidBattery) : 0;
                     const adjustedMinBat = Math.max(0, startBat - (startBat - rawMinBat) * windFactor);
 
                     return (
@@ -101,4 +114,4 @@ export default function FlightDetailPanel({
             </div>
         </div>
     );
-}
+});

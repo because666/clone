@@ -40,3 +40,23 @@ export const CITIES = [
     { id: "chengdu", label: "成都 · 核心" },
     { id: "chongqing", label: "重庆 · 主城" }
 ];
+
+/** 【P2-1 统一常量】城市简称映射 —— TaskManagementPanel 等使用 */
+export const CITY_LABEL_MAP: Record<string, string> = {
+    shenzhen: '深圳',
+    beijing: '北京',
+    shanghai: '上海',
+    guangzhou: '广州',
+    chengdu: '成都',
+    chongqing: '重庆',
+};
+
+/** 【P2-1 统一常量】城市运营中心全称映射 —— DashboardOverlay 使用 */
+export const CITY_CONTROL_CENTER_MAP: Record<string, string> = {
+    shenzhen: '深圳南山运营控制中心',
+    beijing: '北京核心运营控制中心',
+    shanghai: '上海核心运营控制中心',
+    guangzhou: '广州核心运营控制中心',
+    chengdu: '成都核心运营控制中心',
+    chongqing: '重庆主城运营控制中心',
+};

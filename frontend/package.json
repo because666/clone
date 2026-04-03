@@ -1,17 +1,20 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "perf:scan": "node ../tools/perf_radar.js",
+    "postinstall": "node scripts/patch-luma.js"
   },
   "dependencies": {
     "@deck.gl/geo-layers": "^9.2.9",
     "@deck.gl/layers": "^9.2.9",
+    "@deck.gl/mesh-layers": "^9.2.9",
     "@deck.gl/react": "^9.2.9",
     "@fontsource/share-tech-mono": "^5.2.7",
     "axios": "^1.13.6",
@@ -22,6 +25,7 @@
     "echarts-for-react": "^3.0.6",
     "lucide-react": "^0.575.0",
     "maplibre-gl": "^5.19.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-error-boundary": "^6.1.1",

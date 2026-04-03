@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useCallback, useRef, type ReactNod
 /** 单条告警 */
 export interface AlertItem {
     id: string;
-    type: 'low-battery' | 'danger-zone';
+    type: 'low-battery' | 'danger-zone' | 'conflict';
     flightId: string;
     message: string;
     timestamp: number;       // Date.now()
@@ -14,27 +14,31 @@ interface AlertContextType {
     totalCounts: {
         'low-battery': number;
         'danger-zone': number;
+        'conflict': number;
     };
     pushAlert: (type: AlertItem['type'], flightId: string, message: string) => void;
 }
 
 const AlertContext = createContext<AlertContextType>({
     alerts: [],
-    totalCounts: { 'low-battery': 0, 'danger-zone': 0 },
+    totalCounts: { 'low-battery': 0, 'danger-zone': 0, 'conflict': 0 },
     pushAlert: () => {},
 });
 
 const MAX_ALERTS = 5;           // 最多同时保留 5 条
 const AUTO_DISMISS_MS = 8000;   // 8 秒后自动消失
 const COOLDOWN_MS = 30000;      // 同一架无人机 30 秒内不重复告警
+const COOLDOWN_CLEANUP_INTERVAL = 50; // 每 50 次推送清理一次过期冷却条目
 
 /** 告警推送 Provider */
 export function AlertNotificationProvider({ children }: { children: ReactNode }) {
     const [alerts, setAlerts] = useState<AlertItem[]>([]);
-    const [totalCounts, setTotalCounts] = useState({ 'low-battery': 0, 'danger-zone': 0 });
+    const [totalCounts, setTotalCounts] = useState({ 'low-battery': 0, 'danger-zone': 0, 'conflict': 0 });
     
     // 冷却表：{ [flightId-type]: lastPushTime }
     const cooldownRef = useRef<Map<string, number>>(new Map());
+    // 【性能优化 P2-A】推送计数器，用于触发冷却表定期清理
+    const pushCountRef = useRef(0);
 
     const pushAlert = useCallback((type: AlertItem['type'], flightId: string, message: string) => {
         const cooldownKey = `${flightId}-${type}`;
@@ -43,6 +47,16 @@ export function AlertNotificationProvider({ children }: { children: ReactNode })
         if (now - last < COOLDOWN_MS) return; // 冷却期内不重复推送
 
         cooldownRef.current.set(cooldownKey, now);
+
+        // 【P2-A】定期清理过期冷却条目，防止长时间运行后内存泄漏
+        pushCountRef.current++;
+        if (pushCountRef.current % COOLDOWN_CLEANUP_INTERVAL === 0) {
+            const expireThreshold = now - COOLDOWN_MS * 2;
+            const map = cooldownRef.current;
+            for (const [key, ts] of map) {
+                if (ts < expireThreshold) map.delete(key);
+            }
+        }
 
         // 更新累计计数
         setTotalCounts(prev => ({

@@ -1,10 +1,22 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
-import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount } from '../utils/animation';
+import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, sabSyncBuffer, sabSyncFlag, uavActiveIndicesBuffer, conflictPairsBuffer, setConflictPairCount, conflictPairCount } from '../utils/animation';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
+import AnimationWorker from '../workers/animation.worker?worker';
 
-// 动画渲染的步长常量
 const ANIMATION_SPEED = 0.016;
+
+// 【性能优化 P0-1】冲突检测的模块级复用容器，消除每帧 new Map/Set 的 GC 尖刺
+const _conflictGrid = new Map<number, number[]>();
+const _conflictChecked = new Set<number>();
+const _bucketPool: number[][] = [];
+let _bucketPoolPtr = 0;
+// 【性能优化 OPT-A2】预缓存 cosLat 查表数组，消除冲突检测内层循环中的 Math.cos 调用
+const _cosLatCache = new Float32Array(20000);
+
+// 业务基数模拟常量：使前端演示脱离封闭的短时截面数据集束缚，更贴近真实大屏
+const CITY_AIRSPACE_CAPACITY = 1200;  // 模拟南山区低空网络设计最大瞬时并发承载能力
+const BASE_CUMULATIVE_FLIGHTS = 8440; // 模拟从当天凌晨至演示启动前，已经完成的历史基础订单累积量
 
 /**
  * 告警检测帧切片分箱机制（Time Slicing / Binning）
@@ -35,6 +47,64 @@ function fastDistSq(lon1: number, lat1: number, lon2: number, lat2: number): num
     return dx * dx + dy * dy;
 }
 
+/**
+ * 【性能优化 P0-1】图层克隆统一逻辑
+ * 提取为纯函数，消除 animate() 和 handleProgressClick() 中完全相同的 30 行重复代码
+ * 【性能优化 P2-C】用 Map 哈希查找替代 if-else 字符串比较链，消除热路径中的逐字符比较
+ */
+type LayerCloner = (layer: any, currentTime: number) => any;
+
+const pointLayerCloner: LayerCloner = (layer, currentTime) => {
+    const existing = layer.props.updateTriggers || {};
+    return layer.clone({
+        data: {
+            length: activeUAVCount,
+            attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
+        },
+        updateTriggers: { ...existing, getPosition: currentTime }
+    });
+};
+
+const LAYER_CLONERS = new Map<string, LayerCloner>([
+    ['uav-active-tail-layer', (layer, currentTime) => layer.clone({ currentTime })],
+    ['selected-uav-layer', (layer, currentTime) => layer.clone({ updateTriggers: { ...(layer.props.updateTriggers || {}), getPosition: currentTime } })],
+    ['uav-model-layer', (layer, currentTime) => layer.clone({
+        data: { length: activeUAVCount, attributes: layer.props.data?.attributes },
+        updateTriggers: { ...(layer.props.updateTriggers || {}), getPosition: currentTime, getOrientation: currentTime }
+    })],
+    ['uav-point-layer', pointLayerCloner],
+    ['uav-halo-glow-layer', pointLayerCloner],
+    ['uav-halo-core-layer', pointLayerCloner],
+    ['conflict-arc-layer', (layer, currentTime) => {
+        // 中等频率脉冲，清晰且不刺眼
+        const pulse = (Math.sin(currentTime * 12) + 1) / 2;
+        return layer.clone({
+            data: { length: conflictPairCount },
+            getSourceColor: [255, 30, 30, 150 + 80 * pulse],
+            getTargetColor: [255, 140, 30, 150 + 80 * pulse],
+            widthMinPixels: 5 + 4 * pulse, // 发光但不拉扯画面的线宽
+            updateTriggers: {
+                ...(layer.props.updateTriggers || {}),
+                getSourcePosition: currentTime,
+                getTargetPosition: currentTime
+            }
+        });
+    }],
+]);
+
+function cloneLayers(deck: any, currentTime: number): any[] {
+    const currentLayers = deck.props.layers || [];
+    const len = currentLayers.length;
+    const updatedLayers = new Array(len);
+    for (let li = 0; li < len; li++) {
+        const layer = currentLayers[li];
+        if (!layer) { updatedLayers[li] = layer; continue; }
+        const cloner = LAYER_CLONERS.get(layer.id);
+        updatedLayers[li] = cloner ? cloner(layer, currentTime) : layer; // 静态图层：零拷贝引用传递
+    }
+    return updatedLayers;
+}
+
 export function useUAVAnimation(
     trajectories: UAVPath[],
     timeRangeRef: React.MutableRefObject<{ min: number; max: number }>,
@@ -44,25 +114,70 @@ export function useUAVAnimation(
     energyData?: any,
     poiSensitive?: any,
     windSpeed?: number,
-    pushAlert?: (type: 'low-battery' | 'danger-zone', flightId: string, message: string) => void,
+    pushAlert?: (type: 'low-battery' | 'danger-zone' | 'conflict', flightId: string, message: string) => void,
     trackingStateRef?: React.MutableRefObject<{ isTracking: boolean, lockedFlight: any | null }>
 ) {
     const trajectoriesRef = useRef<UAVPath[]>([]);
-    useEffect(() => { trajectoriesRef.current = trajectories; }, [trajectories]);
+    
+    // 【OPT-2】高度并行化 Worker 线程
+    const workerRef = useRef<Worker | null>(null);
+
+    useEffect(() => {
+        // @ts-ignore
+        workerRef.current = new AnimationWorker();
+        
+        workerRef.current.onmessage = (e) => {
+            if (e.data.type === 'UPDATE_DONE') {
+                const count = e.data.payload.count;
+                setActiveUAVCount(count);
+                // 主线程根据传回来的索引，快速重建高频互动需要用到的内存表
+                const trs = trajectoriesRef.current;
+                for (let i = 0; i < count; i++) {
+                    activeUAVTrajectories[i] = trs[uavActiveIndicesBuffer[i]];
+                }
+            }
+        };
+
+        return () => {
+            workerRef.current?.terminate();
+        };
+    }, []);
+
+    useEffect(() => { 
+        trajectoriesRef.current = trajectories; 
+        if (workerRef.current && trajectories.length) {
+            workerRef.current.postMessage({
+                type: 'INIT',
+                payload: {
+                    trajectories,
+                    cycleDuration: timeRangeRef.current.max
+                }
+            });
+        }
+    }, [trajectories, timeRangeRef]);
 
     const [isPlaying, setIsPlaying] = useState(true);
     const [animationSpeed, setAnimationSpeed] = useState(1);
 
     // ==========================================
-    // 渲染闭环稳定性防护：状态解耦机制
-    // React state 更新往往会导致组件重渲染。但这里是高频核心动画引擎，
-    // 为了防止 requestAnimationFrame (RAF) 因组件重绘而频繁被注销/重启（导致闪动），
-    // 强制将频繁变更的依赖缓存至 MutableRefObject，使 animate 函数永久保持闭包级别固定引用。
+    // 渲染闭环稳定性防护：单一状态机机制 (OPT-6)
+    // 直接同步渲染变量至 refs 对象，避开 useEffect 的生命周期延迟，
+    // 维持 animate 的稳定闭包
     // ==========================================
-    const isPlayingRef = useRef(isPlaying);
-    useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-    const animSpeedRef = useRef(animationSpeed);
-    useEffect(() => { animSpeedRef.current = animationSpeed; }, [animationSpeed]);
+    const animationStateRef = useRef({
+        isPlaying,
+        speed: animationSpeed,
+        energyData,
+        windSpeed,
+        pushAlert
+    });
+    // 【性能优化 P6-A】按属性赋值而非构建新对象，消灭高频 React 生命周期带来的闭包对象开销与 V8 Heap GC 狂暴回收
+    animationStateRef.current.isPlaying = isPlaying;
+    animationStateRef.current.speed = animationSpeed;
+    animationStateRef.current.energyData = energyData;
+    animationStateRef.current.windSpeed = windSpeed;
+    animationStateRef.current.pushAlert = pushAlert;
+
     const animFrameRef = useRef<number>(0);
 
     const progressBarRef = useRef<HTMLDivElement>(null);
@@ -70,13 +185,24 @@ export function useUAVAnimation(
     const metricsRef = useRef<{ active: ArrayLike<number>, cumulative: ArrayLike<number>, maxActive: number }>({ active: [], cumulative: [], maxActive: 1 });
     const alertFrameCounter = useRef(0);
 
-    // 缓存敏感 POI 点数组
+    // 【性能优化 OPT-5】建立空间哈希索引网格，消除暴力空间遍历
     const sensitivePointsRef = useRef<any[]>([]);
+    const sensitiveGridRef = useRef<Map<number, any[]>>(new Map());
+
     useEffect(() => {
         if (poiSensitive?.features) {
-            sensitivePointsRef.current = poiSensitive.features.filter(
-                (f: any) => f.geometry?.type === 'Point'
-            );
+            const points = poiSensitive.features.filter((f: any) => f.geometry?.type === 'Point');
+            sensitivePointsRef.current = points;
+
+            // 构建约 500m (0.005度) 分桶的哈希网格（【性能优化 P6-B】使用整数位移哈希替代高频 String 拼接 GC）
+            const grid = new Map<number, any[]>();
+            for (const p of points) {
+                const [lon, lat] = p.geometry.coordinates;
+                const k = ((lon / 0.005) | 0) * 100000 + ((lat / 0.005) | 0);
+                if (!grid.has(k)) grid.set(k, []);
+                grid.get(k)!.push(p);
+            }
+            sensitiveGridRef.current = grid;
         }
     }, [poiSensitive]);
 
@@ -126,6 +252,8 @@ export function useUAVAnimation(
         bar: HTMLElement | null,
         initialized: boolean
     }>({ active: null, cum: null, load: null, bar: null, initialized: false });
+    
+    const lastDashboardMetrics = useRef({ active: -1, cum: -1, load: -1 });
 
     const updateDashboardDOM = useCallback((time: number) => {
         const metricsLen = metricsRef.current.active.length;
@@ -135,11 +263,21 @@ export function useUAVAnimation(
         if (sec < 0) return;
 
         const activeCount = metricsRef.current.active[sec] || 0;
-        const cumCount = metricsRef.current.cumulative[sec] || 0;
-        const loadPct = ((activeCount / metricsRef.current.maxActive) * 100 + 0.5) | 0;
+        // 累加上全天历史基数，呈现出一个宏大且单调递增的今日真实流水量
+        const cumCount = (metricsRef.current.cumulative[sec] || 0) + BASE_CUMULATIVE_FLIGHTS;
+        // 使用宏观物理空域承载力作为分母（避免用数据自身峰值当分母造成的假100%现象），设定 100 封顶
+        const loadPct = Math.min(100, ((activeCount / CITY_AIRSPACE_CAPACITY) * 100 + 0.5) | 0);
+
+        const cache = domCacheRef.current;
+        const last = lastDashboardMetrics.current;
+        
+        // 【性能优化 P6-C】如果底层数据没有变化，直接阻断后续查找与 DOM 指令写入（无论 JS 还是 DOM 都拒绝废操作）
+        if (cache.initialized && last.active === activeCount && last.cum === cumCount && last.load === loadPct) {
+            return;
+        }
+        lastDashboardMetrics.current = { active: activeCount, cum: cumCount, load: loadPct };
 
         // 懒初始化 DOM 缓存
-        const cache = domCacheRef.current;
         if (!cache.initialized) {
             cache.active = document.getElementById('dashboard-active-drones');
             cache.cum = document.getElementById('dashboard-cumulative-flights');
@@ -154,22 +292,14 @@ export function useUAVAnimation(
         if (cache.bar) cache.bar.style.width = loadPct + '%';
     }, []);
 
-    // 缓存 energyData/windSpeed/pushAlert 到 ref，供 animate 帧循环中稳定读取
-    const energyDataRef = useRef(energyData);
-    useEffect(() => { energyDataRef.current = energyData; }, [energyData]);
-    const windSpeedRef = useRef(windSpeed);
-    useEffect(() => { windSpeedRef.current = windSpeed; }, [windSpeed]);
-    const pushAlertRef = useRef(pushAlert);
-    useEffect(() => { pushAlertRef.current = pushAlert; }, [pushAlert]);
-
     // ---- 告警检测逻辑（使用时间切片优化） ----
     const checkAlerts = useCallback((currentTime: number, currentFrame: number) => {
-        const currentPushAlert = pushAlertRef.current;
-        const currentEnergyData = energyDataRef.current;
+        const state = animationStateRef.current;
+        const currentPushAlert = state.pushAlert;
+        const currentEnergyData = state.energyData;
         if (!currentPushAlert || !currentEnergyData) return;
 
-        const wf = calcWindFactor(windSpeedRef.current ?? 3);
-        const sensitivePoints = sensitivePointsRef.current;
+        const wf = calcWindFactor(state.windSpeed ?? 3);
         
         // Time Slicing: 把 O(M*N) 的全量计算平摊。当前帧只处理索引满足条件的无人机
         const binIndex = currentFrame % ALERT_SLICE_BINS;
@@ -197,29 +327,201 @@ export function useUAVAnimation(
                 }
             }
 
-            // ② 危险区检测
-            if (sensitivePoints.length > 0) {
+            // 【性能优化 OPT-5】危险区检测：利用九宫格空间哈希，从 O(M) 降为 O(1)
+            const grid = sensitiveGridRef.current;
+            if (grid.size > 0) {
                 const uavLon = uavPositionsBuffer[i * 3 + 0];
                 const uavLat = uavPositionsBuffer[i * 3 + 1];
-                for (const poi of sensitivePoints) {
-                    const coords = poi.geometry?.coordinates;
-                    if (!coords) continue;
-                    const [poiLon, poiLat] = coords;
-                    const category = poi.properties?.category || '';
-                    const radius = NFZ_RADIUS[category] || DEFAULT_NFZ_RADIUS;
-                    const distSq = fastDistSq(uavLon, uavLat, poiLon, poiLat);
-                    if (distSq < radius * radius) {
-                        const poiName = poi.properties?.name || category;
-                        const dist = Math.sqrt(distSq); // 仅触发时才花性能算真实距离
-                        currentPushAlert(
-                            'danger-zone',
-                            flightId,
-                            `无人机 ${flightId} 已进入 ${poiName} 限制空域（距中心 ${Math.round(dist)}m），请立即调度绕行。`
-                        );
-                        break; // 一架无人机一次只报一个危险区
+                
+                const gx = (uavLon / 0.005) | 0;
+                const gy = (uavLat / 0.005) | 0;
+                let foundAlert = false;
+
+                // 只查找本单元与周边相邻的 8 个单元格子
+                for (let dx = -1; dx <= 1 && !foundAlert; dx++) {
+                    for (let dy = -1; dy <= 1 && !foundAlert; dy++) {
+                        const localPoints = grid.get((gx + dx) * 100000 + (gy + dy));
+                        if (!localPoints) continue;
+
+                        for (const poi of localPoints) {
+                            const coords = poi.geometry?.coordinates;
+                            if (!coords) continue;
+                            const [poiLon, poiLat] = coords;
+                            const category = poi.properties?.category || '';
+                            const radius = NFZ_RADIUS[category] || DEFAULT_NFZ_RADIUS;
+                            const distSq = fastDistSq(uavLon, uavLat, poiLon, poiLat);
+                            if (distSq < radius * radius) {
+                                const poiName = poi.properties?.name || category;
+                                const dist = Math.sqrt(distSq); // 仅触发时才花性能算真实距离
+                                currentPushAlert(
+                                    'danger-zone',
+                                    flightId,
+                                    `无人机 ${flightId} 已进入 ${poiName} 限制空域（距中心 ${Math.round(dist)}m），请立即调度绕行。`
+                                );
+                                foundAlert = true;
+                                break; 
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // ③ 【4D 时空冲突检测】UAV 间邻域碰撞检测
+        // 使用 0.002° (~200m) 空间哈希网格，在同 bin 和邻 bin 内做两两距离检测
+        // 同样使用时间切片：每帧只在 binIndex === 0 时执行一次全量扫描（约每秒一次）
+        if (binIndex === 0 && activeUAVCount > 1) {
+            const CONFLICT_GRID_SIZE = 0.002; // ~200m 网格粒度
+            const CONFLICT_WARN_DIST_SQ = 200 * 200;  // 200m 黄色近距警告
+            const CONFLICT_DANGER_DIST_SQ = 80 * 80;   // 80m 红色碰撞风险
+            const CONFLICT_ALT_THRESHOLD = 30;          // 高度差阈值（米）
+
+            // 【性能优化 P0-1】模块级容器复用：clear() 替代 new，消除每帧 Map/Set 堆分配导致的 GC 尖刺
+            _conflictGrid.clear();
+            _conflictChecked.clear();
+            _bucketPoolPtr = 0;
+
+            // 【性能优化 OPT-A2】批量预计算 cosLat，消除内层 fastDistSq 中每次调用 Math.cos 的开销
+            for (let u = 0; u < activeUAVCount; u++) {
+                _cosLatCache[u] = Math.cos(uavPositionsBuffer[u * 3 + 1] * DEG2RAD);
+            }
+
+            for (let u = 0; u < activeUAVCount; u++) {
+                const gx = (uavPositionsBuffer[u * 3] / CONFLICT_GRID_SIZE) | 0;
+                const gy = (uavPositionsBuffer[u * 3 + 1] / CONFLICT_GRID_SIZE) | 0;
+                const key = gx * 100000 + gy;
+                let bucket = _conflictGrid.get(key);
+                if (!bucket) {
+                    // 对象池：优先复用已有桶数组，避免每帧 new Array
+                    if (_bucketPoolPtr < _bucketPool.length) {
+                        bucket = _bucketPool[_bucketPoolPtr];
+                        bucket.length = 0;
+                    } else {
+                        bucket = [];
+                        _bucketPool.push(bucket);
+                    }
+                    _bucketPoolPtr++;
+                    _conflictGrid.set(key, bucket);
+                }
+                bucket.push(u);
+            }
+
+            let pairCount = 0;
+            const maxPairs = 200;
+
+            // 【性能优化 OPT-A4】九宫格邻桶遍历：修复跨桶边界冲突漏检的正确性问题
+            // 对每个已占用桶，检查本桶 + 右/下/右下 4 个方向的邻桶（避免对称重复）
+            const NEIGHBOR_OFFSETS = [
+                0,           // 自身
+                1,           // 右
+                100000,      // 下
+                100001,      // 右下
+                99999,       // 左下（补充对角）
+            ];
+
+            for (const [bucketKey, indices] of _conflictGrid) {
+                if (pairCount >= maxPairs) break;
+                // 同 bin 内两两检测
+                for (let a = 0; a < indices.length && pairCount < maxPairs; a++) {
+                    const ai = indices[a];
+                    const ax = uavPositionsBuffer[ai * 3];
+                    const ay = uavPositionsBuffer[ai * 3 + 1];
+                    const az = uavPositionsBuffer[ai * 3 + 2];
+
+                    for (let b = a + 1; b < indices.length && pairCount < maxPairs; b++) {
+                        const bi = indices[b];
+                        const pairKey = ai < bi ? ai * 100000 + bi : bi * 100000 + ai;
+                        if (_conflictChecked.has(pairKey)) continue;
+                        _conflictChecked.add(pairKey);
+
+                        const bz = uavPositionsBuffer[bi * 3 + 2];
+                        const altDiff = Math.abs(az - bz);
+                        if (altDiff > CONFLICT_ALT_THRESHOLD) continue;
+
+                        const bx = uavPositionsBuffer[bi * 3];
+                        const by = uavPositionsBuffer[bi * 3 + 1];
+                        // 【OPT-A2】使用预缓存的 cosLat 做距离估算
+                        const cosAvg = (_cosLatCache[ai] + _cosLatCache[bi]) * 0.5;
+                        const dxR = (bx - ax) * DEG2RAD * cosAvg * R;
+                        const dyR = (by - ay) * DEG2RAD * R;
+                        const distSq = dxR * dxR + dyR * dyR;
+
+                        if (distSq < CONFLICT_WARN_DIST_SQ) {
+                            conflictPairsBuffer[pairCount * 6 + 0] = ax;
+                            conflictPairsBuffer[pairCount * 6 + 1] = ay;
+                            conflictPairsBuffer[pairCount * 6 + 2] = az;
+                            conflictPairsBuffer[pairCount * 6 + 3] = bx;
+                            conflictPairsBuffer[pairCount * 6 + 4] = by;
+                            conflictPairsBuffer[pairCount * 6 + 5] = bz;
+                            pairCount++;
+
+                            if (distSq < CONFLICT_DANGER_DIST_SQ) {
+                                const idA = activeUAVTrajectories[ai]?.id || `UAV-${ai}`;
+                                const idB = activeUAVTrajectories[bi]?.id || `UAV-${bi}`;
+                                const dist = Math.sqrt(distSq);
+                                currentPushAlert(
+                                    'conflict',
+                                    `${idA}_${idB}`,
+                                    `空域冲突！${idA} 与 ${idB} 水平距离仅 ${Math.round(dist)}m，高度差 ${Math.round(altDiff)}m，存在碰撞风险！`
+                                );
+                            }
+                        }
+                    }
+                }
+                // 【OPT-A4】跨桶邻域检测：与右/下/对角邻桶做交叉检测
+                for (let ni = 1; ni < NEIGHBOR_OFFSETS.length && pairCount < maxPairs; ni++) {
+                    const neighborKey = bucketKey + NEIGHBOR_OFFSETS[ni];
+                    const neighborIndices = _conflictGrid.get(neighborKey);
+                    if (!neighborIndices) continue;
+
+                    for (let a = 0; a < indices.length && pairCount < maxPairs; a++) {
+                        const ai = indices[a];
+                        const ax = uavPositionsBuffer[ai * 3];
+                        const ay = uavPositionsBuffer[ai * 3 + 1];
+                        const az = uavPositionsBuffer[ai * 3 + 2];
+
+                        for (let b = 0; b < neighborIndices.length && pairCount < maxPairs; b++) {
+                            const bi = neighborIndices[b];
+                            const pairKey = ai < bi ? ai * 100000 + bi : bi * 100000 + ai;
+                            if (_conflictChecked.has(pairKey)) continue;
+                            _conflictChecked.add(pairKey);
+
+                            const bz = uavPositionsBuffer[bi * 3 + 2];
+                            const altDiff = Math.abs(az - bz);
+                            if (altDiff > CONFLICT_ALT_THRESHOLD) continue;
+
+                            const bx = uavPositionsBuffer[bi * 3];
+                            const by = uavPositionsBuffer[bi * 3 + 1];
+                            const cosAvg = (_cosLatCache[ai] + _cosLatCache[bi]) * 0.5;
+                            const dxR = (bx - ax) * DEG2RAD * cosAvg * R;
+                            const dyR = (by - ay) * DEG2RAD * R;
+                            const distSq = dxR * dxR + dyR * dyR;
+
+                            if (distSq < CONFLICT_WARN_DIST_SQ) {
+                                conflictPairsBuffer[pairCount * 6 + 0] = ax;
+                                conflictPairsBuffer[pairCount * 6 + 1] = ay;
+                                conflictPairsBuffer[pairCount * 6 + 2] = az;
+                                conflictPairsBuffer[pairCount * 6 + 3] = bx;
+                                conflictPairsBuffer[pairCount * 6 + 4] = by;
+                                conflictPairsBuffer[pairCount * 6 + 5] = bz;
+                                pairCount++;
+
+                                if (distSq < CONFLICT_DANGER_DIST_SQ) {
+                                    const idA = activeUAVTrajectories[ai]?.id || `UAV-${ai}`;
+                                    const idB = activeUAVTrajectories[bi]?.id || `UAV-${bi}`;
+                                    const dist = Math.sqrt(distSq);
+                                    currentPushAlert(
+                                        'conflict',
+                                        `${idA}_${idB}`,
+                                        `空域冲突！${idA} 与 ${idB} 水平距离仅 ${Math.round(dist)}m，高度差 ${Math.round(altDiff)}m，存在碰撞风险！`
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            setConflictPairCount(pairCount);
         }
     }, []); // 稳定回调：所有外部依赖已通过 ref 读取
 
@@ -231,47 +533,40 @@ export function useUAVAnimation(
 
         let next = currentTimeRef.current;
         
-        // 【性能优化】从 ref 读取播放状态，避免 animate 依赖 isPlaying state
-        if (isPlayingRef.current) {
-            next += ANIMATION_SPEED * animSpeedRef.current;
+        // 【性能优化 OPT-6】从单一状态机读取播放状态
+        const state = animationStateRef.current;
+        if (state.isPlaying) {
+            next += ANIMATION_SPEED * state.speed;
             if (next > timeRangeRef.current.max) next = 0;
             currentTimeRef.current = next;
         }
 
         const deck = deckRef.current?.deck;
         if (deck) {
-            // 【性能优化】将 buffer 更新提前到图层遍历外部，确保一帧只调用一次
-            updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max);
-
-            // 【性能优化】原地 for 循环替代 .map()，消除每帧的数组分配和闭包创建
-            const currentLayers = deck.props.layers || [];
-            const len = currentLayers.length;
-            const updatedLayers = new Array(len);
-            for (let li = 0; li < len; li++) {
-                const layer = currentLayers[li];
-                if (!layer) { updatedLayers[li] = layer; continue; }
-                const lid = layer.id;
-                if (lid === 'uav-active-tail-layer') {
-                    updatedLayers[li] = layer.clone({ currentTime: next });
-                } else if (lid === 'selected-uav-layer') {
-                    updatedLayers[li] = layer.clone({ updateTriggers: { getPosition: next } });
-                } else if (lid === 'uav-model-layer') {
-                    updatedLayers[li] = layer.clone({
-                        data: { length: activeUAVCount },
-                        updateTriggers: { getPosition: next, getOrientation: next }
-                    });
-                } else if (lid === 'uav-point-layer') {
-                    updatedLayers[li] = layer.clone({
-                        data: {
-                            length: activeUAVCount,
-                            attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
-                        },
-                        updateTriggers: { getPosition: next }
-                    });
-                } else {
-                    updatedLayers[li] = layer; // 静态图层：零拷贝引用传递
-                }
+            // 【性能优化 OPT-2】通过 Worker 计算或者如果主线程直调降级
+            if (typeof SharedArrayBuffer !== 'undefined' && workerRef.current) {
+                // 派发任务给 Worker（异步），主线程在下一次帧取用计算好的数据
+                workerRef.current.postMessage({
+                    type: 'UPDATE',
+                    payload: {
+                        currentGlobalTime: next,
+                        sabPositions,
+                        sabOrientations,
+                        sabActiveTrajectoryIndices,
+                        sabSyncBuffer, // 【OPT-A1】传入同步标志 SAB
+                    }
+                });
+            } else {
+                updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max);
             }
+
+            // 【性能优化 OPT-A1】Atomics 栅栏同步：只有在 Worker 写入完成（标志位=1）时才执行图层克隆
+            // 若 Worker 仍在写入，则沿用上一帧数据，避免读取到半新半旧的撕裂状态
+            const workerReady = typeof SharedArrayBuffer !== 'undefined'
+                ? Atomics.load(sabSyncFlag, 0) === 1
+                : true;
+            // 【性能优化 P0-1】使用提取的统一图层克隆函数，已自带静态图层复用功能(OPT-3)
+            const updatedLayers = workerReady ? cloneLayers(deck, next) : deck.props.layers;
             
             let nextViewState = undefined;
             // 【电影级运镜】硬锁定跟拍逻辑：在 RAF 级别直接架空 React 接管相机坐标
@@ -308,18 +603,25 @@ export function useUAVAnimation(
             }
         }
 
-        if (progressBarRef.current) {
-            const progress = timeRangeRef.current.max > 0 ? (next / timeRangeRef.current.max) * 100 : 0;
-            progressBarRef.current.style.width = `${progress}%`;
-        }
-        if (progressTextRef.current) {
-            progressTextRef.current.textContent = formatElapsed(next);
-        }
+        alertFrameCounter.current++;
 
-        updateDashboardDOM(next);
+        // 【性能优化 OPT-8】DOM 更新降频至约 15fps（每 4 帧更新一次），减少 style recalc
+        if (alertFrameCounter.current % 4 === 0) {
+            if (progressBarRef.current) {
+                const progress = timeRangeRef.current.max > 0 ? (next / timeRangeRef.current.max) * 100 : 0;
+                progressBarRef.current.style.width = `${progress}%`;
+            }
+            if (progressTextRef.current) {
+                const txt = formatElapsed(next);
+                // 【性能优化 P6-D】拦截无效的文本 DOM 写入，降低 Browser Paint 压力
+                if (progressTextRef.current.textContent !== txt) {
+                    progressTextRef.current.textContent = txt;
+                }
+            }
+            updateDashboardDOM(next);
+        }
 
         // 降频告警检测 -> 优化为时间切片告警检测，每帧只算 1/60 的数据！消灭性能尖刺！
-        alertFrameCounter.current++;
         checkAlerts(next, alertFrameCounter.current);
 
         animFrameRef.current = requestAnimationFrame(animate);
@@ -354,34 +656,8 @@ export function useUAVAnimation(
             const t = currentTimeRef.current;
             updateActiveUAVsBuffer(trajectoriesRef.current, t, timeRangeRef.current.max);
 
-            const currentLayers = deck.props.layers || [];
-            const len = currentLayers.length;
-            const updatedLayers = new Array(len);
-            for (let li = 0; li < len; li++) {
-                const layer = currentLayers[li];
-                if (!layer) { updatedLayers[li] = layer; continue; }
-                const lid = layer.id;
-                if (lid === 'uav-active-tail-layer') {
-                    updatedLayers[li] = layer.clone({ currentTime: t });
-                } else if (lid === 'selected-uav-layer') {
-                    updatedLayers[li] = layer.clone({ updateTriggers: { getPosition: t } });
-                } else if (lid === 'uav-model-layer') {
-                    updatedLayers[li] = layer.clone({
-                        data: { length: activeUAVCount },
-                        updateTriggers: { getPosition: t, getOrientation: t }
-                    });
-                } else if (lid === 'uav-point-layer') {
-                    updatedLayers[li] = layer.clone({
-                        data: {
-                            length: activeUAVCount,
-                            attributes: { getPosition: { value: uavPositionsBuffer, size: 3 } }
-                        },
-                        updateTriggers: { getPosition: t }
-                    });
-                } else {
-                    updatedLayers[li] = layer;
-                }
-            }
+            // 【性能优化 P0-1】使用提取的统一图层克隆函数
+            const updatedLayers = cloneLayers(deck, t);
             deck.setProps({ layers: updatedLayers });
         }
     }, [timeRangeRef, currentTimeRef, updateDashboardDOM, deckRef]);

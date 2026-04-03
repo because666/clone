@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
+const CHART_STYLE = { height: '240px', width: '100%' };
+
 interface Props {
     energyData: any;
 }
@@ -51,5 +53,5 @@ export default function PayloadDistributionChart({ energyData }: Props) {
         };
     }, [energyData]);
 
-    return <ReactECharts option={option} style={{ height: '240px', width: '100%' }} />;
+    return <ReactECharts option={option} style={CHART_STYLE} />;
 }

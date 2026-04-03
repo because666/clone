@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
+const CHART_STYLE = { height: '240px', width: '100%' };
+
 interface Props {
     trajectories: any[];
 }
@@ -70,5 +72,5 @@ export default function FlightVolumeChart({ trajectories }: Props) {
         };
     }, [trajectories]);
 
-    return <ReactECharts option={option} style={{ height: '240px', width: '100%' }} />;
+    return <ReactECharts option={option} style={CHART_STYLE} />;
 }

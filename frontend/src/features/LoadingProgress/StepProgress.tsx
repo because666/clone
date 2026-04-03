@@ -65,70 +65,73 @@ export const StepProgress: React.FC<StepProgressProps> = ({
     }
 
     return (
-        <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/60 rounded-2xl px-6 py-5 shadow-2xl min-w-[320px] animate-fade-in">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-cyan-300 text-sm font-medium">{title}</h3>
-                <span className="text-slate-400 text-xs">{completedCount}/{totalCount}</span>
+        <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl px-6 py-5 shadow-2xl min-w-[320px] animate-fade-in relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900/5 to-transparent pointer-events-none"></div>
+            
+            <div className="relative z-10 flex items-center justify-between mb-4">
+                <h3 className="text-slate-800 text-sm font-black tracking-tight">{title}</h3>
+                <span className="text-slate-500 text-xs font-bold">{completedCount}/{totalCount}</span>
             </div>
 
             {/* 进度条容器 */}
-            <div className="w-full h-2 bg-slate-700/50 rounded-full overflow-hidden mb-5">
+            <div className="relative z-10 w-full h-2 bg-slate-200/80 rounded-full overflow-hidden mb-5 shadow-inner border border-slate-300/50">
                 {/* 进度条填充 */}
                 <div
-                    className="h-full bg-gradient-to-r from-cyan-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500 ease-out"
+                    className="h-full w-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full transition-all duration-500 ease-out shadow-sm"
                     style={{
-                        width: `${progress}%`,
+                        transform: `scaleX(${progress / 100})`,
+                        transformOrigin: 'left',
                         transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
                     }}
                 />
             </div>
 
             {/* 进度百分比显示 */}
-            <div className="flex justify-between items-center mb-4">
-                <span className="text-slate-500 text-xs">加载进度</span>
-                <span className="text-cyan-400 text-sm font-medium">{Math.round(progress)}%</span>
+            <div className="relative z-10 flex justify-between items-center mb-4">
+                <span className="text-slate-600 text-[11px] font-bold tracking-wide uppercase">加载进度</span>
+                <span className="text-indigo-700 text-sm font-black drop-shadow-sm">{Math.round(progress)}%</span>
             </div>
 
-            <div className="space-y-3">
+            <div className="relative z-10 space-y-3">
                 {steps.map((step, index) => (
                     <div key={step.id} className="flex items-center gap-3">
                         {/* 步骤状态图标 */}
                         <div className={`
-                            w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
+                            w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm
                             transition-all duration-300 ease-out
                             ${step.status === 'completed'
-                                ? 'bg-emerald-500/20 border border-emerald-500/50 scale-100'
+                                ? 'bg-emerald-100 border border-emerald-300 scale-100'
                                 : step.status === 'loading'
-                                    ? 'bg-cyan-500/20 border border-cyan-500/50 scale-110'
+                                    ? 'bg-indigo-100 border border-indigo-300 scale-110'
                                     : step.status === 'error'
-                                        ? 'bg-red-500/20 border border-red-500/50 scale-100'
-                                        : 'bg-slate-700/30 border border-slate-600/50 scale-100'
+                                        ? 'bg-rose-100 border border-rose-300 scale-100'
+                                        : 'bg-slate-100 border border-slate-200 scale-100'
                             }
                         `}>
                             {step.status === 'completed' && (
-                                <Check className="w-3.5 h-3.5 text-emerald-400 animate-scale-in" />
+                                <Check className="w-3.5 h-3.5 text-emerald-600 animate-scale-in" />
                             )}
                             {step.status === 'loading' && (
-                                <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                                <Loader2 className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
                             )}
                             {step.status === 'error' && (
-                                <span className="text-red-400 text-xs font-bold">!</span>
+                                <span className="text-rose-600 text-xs font-bold">!</span>
                             )}
                             {step.status === 'pending' && (
-                                <span className="text-slate-500 text-xs">{index + 1}</span>
+                                <span className="text-slate-500 text-xs font-bold">{index + 1}</span>
                             )}
                         </div>
 
                         {/* 步骤标签 */}
                         <span className={`
-                            text-sm transition-colors duration-300
+                            text-sm transition-colors duration-300 tracking-wide
                             ${step.status === 'completed'
-                                ? 'text-emerald-300'
+                                ? 'text-emerald-700 font-bold'
                                 : step.status === 'loading'
-                                    ? 'text-cyan-300 font-medium'
+                                    ? 'text-indigo-800 font-black'
                                     : step.status === 'error'
-                                        ? 'text-red-300'
-                                        : 'text-slate-500'
+                                        ? 'text-rose-700 font-bold'
+                                        : 'text-slate-500 font-medium'
                             }
                         `}>
                             {step.label}
@@ -136,14 +139,14 @@ export const StepProgress: React.FC<StepProgressProps> = ({
 
                         {/* 步骤状态文字 */}
                         <span className={`
-                            ml-auto text-xs transition-all duration-300
+                            ml-auto text-[11px] font-bold uppercase transition-all duration-300
                             ${step.status === 'completed'
-                                ? 'text-emerald-400 opacity-100'
+                                ? 'text-emerald-600 opacity-100'
                                 : step.status === 'loading'
-                                    ? 'text-cyan-400 opacity-100'
+                                    ? 'text-indigo-600 opacity-100'
                                     : step.status === 'error'
-                                        ? 'text-red-400 opacity-100'
-                                        : 'text-slate-600 opacity-0'
+                                        ? 'text-rose-600 opacity-100'
+                                        : 'text-slate-400 opacity-0'
                             }
                         `}>
                             {step.status === 'completed' && '完成'}

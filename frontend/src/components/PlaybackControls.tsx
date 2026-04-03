@@ -1,5 +1,7 @@
+import { memo } from 'react';
+import { Eye, Plane, Building2, ShieldAlert } from 'lucide-react';
+import type { VisionMode } from './VisionModeDock';
 import { CITIES } from '../constants/map';
-import { formatElapsed } from '../utils/animation';
 
 interface PlaybackControlsProps {
     isPlaying: boolean;
@@ -10,13 +12,11 @@ interface PlaybackControlsProps {
     handleCityJump: (cityId: string) => void;
     isDropdownOpen: boolean;
     setIsDropdownOpen: (val: boolean) => void;
-    progressBarRef: React.RefObject<HTMLDivElement | null>;
-    progressTextRef: React.RefObject<HTMLSpanElement | null>;
-    handleProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-    timeRangeMax: number;
+    visionMode: VisionMode;
+    setVisionMode: (val: VisionMode) => void;
 }
 
-export default function PlaybackControls({
+const PlaybackControls = memo(function PlaybackControls({
     isPlaying,
     setIsPlaying,
     animationSpeed,
@@ -25,14 +25,12 @@ export default function PlaybackControls({
     handleCityJump,
     isDropdownOpen,
     setIsDropdownOpen,
-    progressBarRef,
-    progressTextRef,
-    handleProgressClick,
-    timeRangeMax
+    visionMode,
+    setVisionMode,
 }: PlaybackControlsProps) {
     return (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-            <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] px-8 py-5 flex items-center gap-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] min-w-[580px] relative">
+        <div className="absolute bottom-10 left-[396px] z-20 pointer-events-auto">
+            <div className="pointer-events-auto bg-white/40 backdrop-blur-2xl border border-white/50 rounded-[2rem] px-8 py-5 flex items-center gap-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] relative">
                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-t from-slate-900/5 to-transparent pointer-events-none overflow-hidden" style={{ zIndex: 0 }}></div>
 
                 <button
@@ -51,29 +49,6 @@ export default function PlaybackControls({
                     )}
                 </button>
 
-                <div className="flex flex-1 flex-col gap-2 relative z-10">
-                    <div className="relative h-2.5 bg-black/5 rounded-full overflow-hidden cursor-pointer shadow-inner border border-white/30"
-                        onClick={handleProgressClick}
-                    >
-                        <div
-                            ref={progressBarRef}
-                            className="absolute top-0 left-0 h-full rounded-full transition-all duration-75"
-                            style={{
-                                width: '0%',
-                                background: 'linear-gradient(90deg, #64748b, #334155)',
-                                boxShadow: '0 0 10px rgba(51, 65, 85, 0.3)'
-                            }}
-                        />
-                    </div>
-                    <div className="flex justify-between items-center text-[11px] font-black text-slate-600 tracking-wider" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.8)' }}>
-                        <div className="flex items-center gap-1.5">
-                            <span ref={progressTextRef}>00:00:00</span>
-                            <span className="text-slate-400 font-medium">/</span>
-                            <span className="text-slate-500">{formatElapsed(timeRangeMax)}</span>
-                        </div>
-                    </div>
-                </div>
-
                 <div className="flex items-center gap-1.5 bg-white/30 p-1.5 rounded-full shadow-inner border border-white/50 relative z-10">
                     {[0.5, 1, 2, 1024].map(speed => (
                         <button
@@ -89,7 +64,7 @@ export default function PlaybackControls({
                     ))}
                 </div>
 
-                <div className="flex items-center ml-2 relative z-50">
+                <div className="flex items-center relative z-50 shrink-0">
                     <div className="relative group">
                         <button
                             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -129,7 +104,39 @@ export default function PlaybackControls({
                         )}
                     </div>
                 </div>
+
+                <div className="w-[1px] h-8 bg-slate-400/30 relative z-10 shrink-0"></div>
+
+                <div className="flex items-center gap-2 relative z-10 shrink-0">
+                    {[
+                        { id: 'default', icon: Eye, label: '常规' },
+                        { id: 'uav', icon: Plane, label: '航班' },
+                        { id: 'building', icon: Building2, label: '基建' },
+                        { id: 'nofly', icon: ShieldAlert, label: '禁航' },
+                    ].map(mode => {
+                        const isActive = visionMode === mode.id;
+                        const Icon = mode.icon;
+                        return (
+                            <button
+                                key={mode.id}
+                                onClick={() => setVisionMode(mode.id as VisionMode)}
+                                className={`flex flex-row items-center whitespace-nowrap gap-1.5 px-4 py-2 rounded-full transition-all duration-300 font-bold text-sm ${
+                                    isActive 
+                                        ? 'bg-slate-700 text-white shadow-md border-transparent' 
+                                        : 'bg-white/50 text-slate-600 hover:bg-white/80 hover:text-slate-900 border border-white/40'
+                                }`}
+                                title={mode.label}
+                            >
+                                <Icon size={16} />
+                                <span>{mode.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
 }
+);
+
+export default PlaybackControls;

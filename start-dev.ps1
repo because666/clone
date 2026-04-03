@@ -36,7 +36,7 @@ Write-Host ""
 # -- Step 1: Python backend deps --
 Write-Host "[1/3] Checking Python dependencies..." -ForegroundColor Yellow
 
-$reqFile = Join-Path $PSScriptRoot "trajectory_lab\requirements.txt"
+$reqFile = Join-Path $PSScriptRoot "backend\requirements.txt"
 
 $pipPkgs = @(
     @{ Name = "flask";            Mod = "flask" },
@@ -45,7 +45,8 @@ $pipPkgs = @(
     @{ Name = "flask-sqlalchemy"; Mod = "flask_sqlalchemy" },
     @{ Name = "pyjwt";            Mod = "jwt" },
     @{ Name = "numpy";            Mod = "numpy" },
-    @{ Name = "shapely";          Mod = "shapely" }
+    @{ Name = "shapely";          Mod = "shapely" },
+    @{ Name = "orjson";           Mod = "orjson" }
 )
 
 $needInstall = $false
@@ -65,7 +66,7 @@ if ($needInstall) {
     Write-Host "  Installing missing Python packages..." -ForegroundColor Cyan
     & pip install -r $reqFile 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  x pip install failed. Run manually: pip install -r trajectory_lab/requirements.txt" -ForegroundColor Red
+        Write-Host "  x pip install failed. Run manually: pip install -r backend/requirements.txt" -ForegroundColor Red
         Read-Host "Press Enter to exit"
         exit 1
     }
@@ -106,7 +107,7 @@ Write-Host ""
 $rootDir = $PSScriptRoot
 
 Write-Host "  -> Backend  (Port 5001)..." -ForegroundColor Green
-Start-Process "cmd.exe" -ArgumentList "/k title [AetherWeave] Backend & cd /d $rootDir & python trajectory_lab\scripts\server.py"
+Start-Process "cmd.exe" -ArgumentList "/k title [AetherWeave] Backend & cd /d $rootDir & python backend\scripts\server.py"
 
 Start-Sleep -Seconds 2
 

@@ -1,12 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { 
   Activity, ShieldAlert, Zap, Wind, Sun, Cloud, CloudRain, 
-  CloudSnow, CloudLightning, BatteryWarning
+  CloudSnow, CloudLightning, BatteryWarning, AlertTriangle
 } from 'lucide-react';
-import { useWindSpeed } from '../contexts/WindSpeedContext';
+import { useEnvironment } from '../contexts/EnvironmentContext';
+import type { WeatherType } from '../contexts/EnvironmentContext';
 import { useAlerts } from './AlertNotificationProvider';
-import { useWeather } from '../contexts/WeatherContext';
-import type { WeatherType } from '../contexts/WeatherContext';
 
 const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] = [
     { type: 'sunny', icon: <Sun size={14} />, label: '晴天' },
@@ -15,12 +14,16 @@ const WEATHER_OPTIONS: { type: WeatherType; icon: ReactNode; label: string }[] =
     { type: 'snowy', icon: <CloudSnow size={14} />, label: '降雪' },
     { type: 'hailing', icon: <CloudLightning size={14} />, label: '冰雹' },
 ];
+interface RightControlPanelProps {
+    isOpen: boolean;
+    onToggle: () => void;
+}
 
-export default function RightControlPanel() {
-    const { windSpeed, setWindSpeed } = useWindSpeed();
+// 【性能优化 P1-D】memo 包裹，避免 DashboardOverlay 父组件 re-render 时无条件重建
+const RightControlPanel = memo(function RightControlPanel({ isOpen, onToggle }: RightControlPanelProps) {
+    const { windSpeed, setWindSpeed, weather, setWeather, temperature, setTemperature } = useEnvironment();
     const { alerts, totalCounts } = useAlerts();
-    const { weather, setWeather, temperature, setTemperature } = useWeather();
-    const [isCollapsed, setIsCollapsed] = useState(true);
+    const isCollapsed = !isOpen;
 
     const getWeatherIcon = () => {
         switch (weather) {
@@ -42,7 +45,7 @@ export default function RightControlPanel() {
             
             {/* 隐藏/显示触发拉手 */}
             <button
-                onClick={() => setIsCollapsed(!isCollapsed)}
+                onClick={onToggle}
                 className="absolute left-[-26px] top-1/2 -translate-y-1/2 w-10 h-24 bg-indigo-600/80 backdrop-blur-3xl border border-white/40 rounded-l-2xl pointer-events-auto flex items-center justify-center text-white hover:bg-indigo-500 transition-all group shadow-[-8px_0_24px_rgba(99,102,241,0.3)]"
                 title={isCollapsed ? "展开面板" : "隐藏面板"}
             >
@@ -149,6 +152,9 @@ export default function RightControlPanel() {
                              <div className="w-px h-2 bg-slate-300"></div>
                              <ShieldAlert size={10} className="text-amber-600" />
                              <span className="text-[9px] font-black text-amber-700">{totalCounts['danger-zone']}</span>
+                             <div className="w-px h-2 bg-slate-300"></div>
+                             <AlertTriangle size={10} className="text-orange-600" />
+                             <span className="text-[9px] font-black text-orange-700">{totalCounts['conflict']}</span>
                         </div>
                     </div>
 
@@ -165,11 +171,11 @@ export default function RightControlPanel() {
                                     className="relative bg-white/60 border border-white/80 rounded-xl p-3 group animate-[alertSlideIn_0.3s_ease-out]"
                                     style={{ animationDelay: `${idx * 0.05}s` }}
                                 >
-                                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${alert.type === 'low-battery' ? 'bg-rose-500' : 'bg-amber-500'}`}></div>
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${alert.type === 'low-battery' ? 'bg-rose-500' : alert.type === 'conflict' ? 'bg-orange-500' : 'bg-amber-500'}`}></div>
                                     <div className="flex justify-between items-start mb-1 pl-1">
                                         <div className="flex items-center gap-1.5">
-                                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm ${alert.type === 'low-battery' ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50'}`}>
-                                                {alert.type === 'low-battery' ? '电量警告' : '危险区域'}
+                                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm ${alert.type === 'low-battery' ? 'text-rose-700 bg-rose-50' : alert.type === 'conflict' ? 'text-orange-700 bg-orange-50' : 'text-amber-700 bg-amber-50'}`}>
+                                                {alert.type === 'low-battery' ? '电量警告' : alert.type === 'conflict' ? '空域冲突' : '危险区域'}
                                             </span>
                                         </div>
                                         <span className="text-[8px] text-slate-400 font-bold tabular-nums">
@@ -188,4 +194,6 @@ export default function RightControlPanel() {
             </div>
         </div>
     );
-}
+});
+
+export default RightControlPanel;

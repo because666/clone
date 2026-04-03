@@ -4,9 +4,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100vh;
   font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   background-color: #0f172a;
   /* Custom dark slate background */
@@ -14,8 +13,15 @@ body {
 }
 
 #root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 3D 大屏专用：锁定视口，禁止页面级滚动 */
+.dashboard-fullscreen {
   width: 100vw;
   height: 100vh;
+  overflow: hidden;
 }
 
 /* 告警 Toast 滑入动画 */
@@ -24,6 +30,7 @@ body {
     opacity: 0;
     transform: translateX(80px) scale(0.95);
   }
+
   100% {
     opacity: 1;
     transform: translateX(0) scale(1);
@@ -42,6 +49,7 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 0 6px rgba(14, 165, 233, 0.5);
   border: 2px solid white;
 }
+
 input[type="range"]::-moz-range-thumb {
   width: 14px;
   height: 14px;
@@ -50,4 +58,54 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   box-shadow: 0 0 6px rgba(14, 165, 233, 0.5);
   border: 2px solid white;
+}
+
+/* 柔和滚动条样式（从 TaskManagementPanel 的 dangerouslySetInnerHTML 迁移至此） */
+.soft-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-track {
+  background: rgba(248, 250, 252, 0.5);
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.8);
+  border-radius: 6px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.9);
+}
+
+/* 静态 CSSOM 化：剥离 Render Tree 中的动态模板字符串，避免拖拽重绘时的样式表抖动 */
+.map-filter-active .maplibregl-canvas {
+  filter: invert(0.85) hue-rotate(180deg) brightness(0.9) contrast(1.4) !important;
+}
+
+.maplibregl-canvas {
+  transition: filter 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 从 AiMascot 抽离的静态动画定义，防止随组件重绘导致的 CSSOM 重算 */
+@keyframes mascotFloat {
+
+  0%,
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+
+  50% {
+    transform: translateY(-12px) scale(1.02);
+  }
+}
+
+@keyframes orbitBounce {
+  0% {
+    transform: translateY(0px) scale(1);
+  }
+
+  100% {
+    transform: translateY(-8px) scale(1.2);
+  }
 }

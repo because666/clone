@@ -13,3 +13,8 @@ __pycache__/
 # Flask SQLite database
 instance/
 *.db
+
+# Environment variables
+.env
+.env.*
+!.env.example
