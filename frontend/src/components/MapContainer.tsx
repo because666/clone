@@ -525,22 +525,21 @@ export default function MapContainer() {
                 )}
 
                 <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-                    <a href="/mobile" target="_blank" className="pointer-events-auto flex items-center gap-2.5 px-5 py-2.5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all no-underline">
+                    {/* 视角提示小板块 */}
+                    <div className="pointer-events-none bg-white/80 backdrop-blur text-slate-700 text-xs flex items-center px-4 py-2.5 rounded-xl shadow border border-slate-200/60 ring-1 ring-black/5 opacity-80 h-full">
+                        💡 提示：按住 <span className="font-semibold text-cyan-600 mx-1">右键</span> 或 <span className="font-semibold text-cyan-600 mx-1">Ctrl+左键</span> 拖动可360°旋转/调整视角
+                    </div>
+                    <a href="/mobile" target="_blank" className="pointer-events-auto flex items-center gap-2.5 px-5 py-2.5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all no-underline h-full">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
                         <span className="text-sm font-black tracking-tight text-slate-800">C端用户入口</span>
                     </a>
-                    <a href="/about" target="_blank" className="pointer-events-auto flex items-center gap-2.5 px-5 py-2.5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all no-underline">
+                    <a href="/about" target="_blank" className="pointer-events-auto flex items-center gap-2.5 px-5 py-2.5 bg-white/40 backdrop-blur-xl border border-white/60 rounded-xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all no-underline h-full">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
                         <span className="text-sm font-black tracking-tight text-slate-800">技术路径</span>
                     </a>
                 </div>
 
-                {/* 视角提示小板块 (居中放置于交互面板下方与屏幕边缘的缝隙中) */}
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-                    <div className="bg-white/80 backdrop-blur text-slate-700 text-xs px-4 py-1 rounded-full shadow border border-slate-200/60 ring-1 ring-black/5 opacity-80">
-                        💡 提示：按住 <span className="font-semibold text-cyan-600">右键</span> 或 <span className="font-semibold text-cyan-600">Ctrl+左键</span> 拖动可360°旋转/调整视角
-                    </div>
-                </div>
+
 
                 {/* 毛玻璃风格的灵动胶囊提示条，不再遮挡视线，已切换白昼主题 */}
                 {toastState && (
