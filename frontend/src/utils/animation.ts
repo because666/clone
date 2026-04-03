@@ -19,6 +19,12 @@ export const sabPositions = getBuffer(MAX_UAVS * 3 * 4); // 4 bytes/float
 export const sabOrientations = getBuffer(MAX_UAVS * 3 * 4);
 export const sabActiveTrajectoryIndices = getBuffer(MAX_UAVS * 4); // 4 bytes/int
 
+// 【性能优化 OPT-A1】Atomics 栅栏同步标志位
+// Worker 写完 SAB 后 Atomics.store(sabSyncFlag, 0, 1)
+// 主线程在 cloneLayers 前检查标志位就绪状态，避免读写竞态导致帧撕裂
+export const sabSyncBuffer = getBuffer(4); // 1 个 Int32
+export const sabSyncFlag = new Int32Array(sabSyncBuffer);
+
 // 扁平化主缓存视图（主线程使用）
 export const uavPositionsBuffer = new Float32Array(sabPositions);
 export const uavOrientationsBuffer = new Float32Array(sabOrientations);

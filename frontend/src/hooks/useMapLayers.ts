@@ -359,7 +359,8 @@ export function useMapLayers({
             id: 'uav-active-tail-layer',
             data: trajectories,
             getPath: (d: any) => d.path,
-            getTimestamps: (d: any) => d.timestamps,
+            // 【性能优化 OPT-A3】优先使用预编译的 Float64Array，跳过 Deck.gl 内部的 JS Array → TypedArray 转换
+            getTimestamps: (d: any) => d.timestampsF64 || d.timestamps,
             getColor: colorAccessor,
             widthMinPixels: widthMinPx,
             trailLength: 100,

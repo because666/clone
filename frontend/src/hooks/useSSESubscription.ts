@@ -17,6 +17,9 @@ type SSECallback = () => void;
 const subscribers = new Set<SSECallback>();
 let sharedEventSource: EventSource | null = null;
 let refCount = 0;
+// 【性能优化 OPT-C2】指数退避重连参数
+let retryDelay = 1000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 function connectSSE() {
     if (sharedEventSource) return; // 已连接
@@ -25,6 +28,7 @@ function connectSSE() {
     const es = new EventSource(`/api/tasks/stream?token=${token}`);
 
     es.onopen = () => {
+        retryDelay = 1000; // 连接成功后重置退避延迟
         console.log('[SSE Singleton] Stream Connected.');
     };
 
@@ -39,8 +43,17 @@ function connectSSE() {
         }
     };
 
-    es.onerror = (e) => {
-        console.warn('[SSE Singleton] Connection Error.', e);
+    // 【OPT-C2】断线自动指数退避重连：延迟 1s→2s→4s→...→30s 上限
+    es.onerror = () => {
+        console.warn(`[SSE Singleton] Connection Error. Reconnecting in ${retryDelay}ms...`);
+        disconnectSSE();
+        if (refCount > 0) {
+            retryTimer = setTimeout(() => {
+                retryTimer = null;
+                connectSSE();
+            }, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 30000);
+        }
     };
 
     sharedEventSource = es;
@@ -50,7 +63,10 @@ function disconnectSSE() {
     if (sharedEventSource) {
         sharedEventSource.close();
         sharedEventSource = null;
-        console.log('[SSE Singleton] Connection Closed.');
+    }
+    if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
     }
 }
 

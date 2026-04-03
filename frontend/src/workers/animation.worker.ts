@@ -7,6 +7,8 @@ let cycleDuration = 0;
 let posView: Float32Array | null = null;
 let oriView: Float32Array | null = null;
 let idxView: Int32Array | null = null;
+// 【OPT-A1】Atomics 同步标志视图
+let syncFlagView: Int32Array | null = null;
 
 self.onmessage = (e: MessageEvent) => {
     const { type, payload } = e.data;
@@ -20,6 +22,7 @@ self.onmessage = (e: MessageEvent) => {
             posView = null;
             oriView = null;
             idxView = null;
+            syncFlagView = null;
             break;
         case 'UPDATE':
             const currentGlobalTime = payload.currentGlobalTime;
@@ -28,6 +31,13 @@ self.onmessage = (e: MessageEvent) => {
             if (!posView) posView = new Float32Array(payload.sabPositions);
             if (!oriView) oriView = new Float32Array(payload.sabOrientations);
             if (!idxView) idxView = new Int32Array(payload.sabActiveTrajectoryIndices);
+            // 【OPT-A1】初始化同步标志视图
+            if (!syncFlagView && payload.sabSyncBuffer) {
+                syncFlagView = new Int32Array(payload.sabSyncBuffer);
+            }
+
+            // 【OPT-A1】写入前清除就绪标志（置0 = 写入中）
+            if (syncFlagView) Atomics.store(syncFlagView, 0, 0);
 
             // 执行高度并行的动画帧计算
             const count = updateActiveUAVsBuffer(
@@ -38,6 +48,9 @@ self.onmessage = (e: MessageEvent) => {
                 oriView,
                 idxView
             );
+
+            // 【OPT-A1】写入完成后置就绪标志（置1 = 数据就绪，主线程可安全读取）
+            if (syncFlagView) Atomics.store(syncFlagView, 0, 1);
 
             // 返回计算完成信号及活跃数量
             self.postMessage({ type: 'UPDATE_DONE', payload: { count, currentGlobalTime } });

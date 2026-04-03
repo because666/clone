@@ -45,7 +45,8 @@ $pipPkgs = @(
     @{ Name = "flask-sqlalchemy"; Mod = "flask_sqlalchemy" },
     @{ Name = "pyjwt";            Mod = "jwt" },
     @{ Name = "numpy";            Mod = "numpy" },
-    @{ Name = "shapely";          Mod = "shapely" }
+    @{ Name = "shapely";          Mod = "shapely" },
+    @{ Name = "orjson";           Mod = "orjson" }
 )
 
 $needInstall = $false

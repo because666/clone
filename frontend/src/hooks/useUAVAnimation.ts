@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { UAVPath } from '../types/map';
-import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, uavActiveIndicesBuffer, conflictPairsBuffer, setConflictPairCount, conflictPairCount } from '../utils/animation';
+import { updateActiveUAVsBuffer, formatElapsed, uavPositionsBuffer, activeUAVTrajectories, activeUAVCount, setActiveUAVCount, sabPositions, sabOrientations, sabActiveTrajectoryIndices, sabSyncBuffer, sabSyncFlag, uavActiveIndicesBuffer, conflictPairsBuffer, setConflictPairCount, conflictPairCount } from '../utils/animation';
 import { calcWindFactor, binarySearchTimestamp } from '../utils/physics';
 import AnimationWorker from '../workers/animation.worker?worker';
 
@@ -11,6 +11,8 @@ const _conflictGrid = new Map<number, number[]>();
 const _conflictChecked = new Set<number>();
 const _bucketPool: number[][] = [];
 let _bucketPoolPtr = 0;
+// 【性能优化 OPT-A2】预缓存 cosLat 查表数组，消除冲突检测内层循环中的 Math.cos 调用
+const _cosLatCache = new Float32Array(20000);
 
 // 业务基数模拟常量：使前端演示脱离封闭的短时截面数据集束缚，更贴近真实大屏
 const CITY_AIRSPACE_CAPACITY = 1200;  // 模拟南山区低空网络设计最大瞬时并发承载能力
@@ -379,6 +381,11 @@ export function useUAVAnimation(
             _conflictChecked.clear();
             _bucketPoolPtr = 0;
 
+            // 【性能优化 OPT-A2】批量预计算 cosLat，消除内层 fastDistSq 中每次调用 Math.cos 的开销
+            for (let u = 0; u < activeUAVCount; u++) {
+                _cosLatCache[u] = Math.cos(uavPositionsBuffer[u * 3 + 1] * DEG2RAD);
+            }
+
             for (let u = 0; u < activeUAVCount; u++) {
                 const gx = (uavPositionsBuffer[u * 3] / CONFLICT_GRID_SIZE) | 0;
                 const gy = (uavPositionsBuffer[u * 3 + 1] / CONFLICT_GRID_SIZE) | 0;
@@ -402,7 +409,17 @@ export function useUAVAnimation(
             let pairCount = 0;
             const maxPairs = 200;
 
-            for (const [_key, indices] of _conflictGrid) {
+            // 【性能优化 OPT-A4】九宫格邻桶遍历：修复跨桶边界冲突漏检的正确性问题
+            // 对每个已占用桶，检查本桶 + 右/下/右下 4 个方向的邻桶（避免对称重复）
+            const NEIGHBOR_OFFSETS = [
+                0,           // 自身
+                1,           // 右
+                100000,      // 下
+                100001,      // 右下
+                99999,       // 左下（补充对角）
+            ];
+
+            for (const [bucketKey, indices] of _conflictGrid) {
                 if (pairCount >= maxPairs) break;
                 // 同 bin 内两两检测
                 for (let a = 0; a < indices.length && pairCount < maxPairs; a++) {
@@ -423,10 +440,13 @@ export function useUAVAnimation(
 
                         const bx = uavPositionsBuffer[bi * 3];
                         const by = uavPositionsBuffer[bi * 3 + 1];
-                        const distSq = fastDistSq(ax, ay, bx, by);
+                        // 【OPT-A2】使用预缓存的 cosLat 做距离估算
+                        const cosAvg = (_cosLatCache[ai] + _cosLatCache[bi]) * 0.5;
+                        const dxR = (bx - ax) * DEG2RAD * cosAvg * R;
+                        const dyR = (by - ay) * DEG2RAD * R;
+                        const distSq = dxR * dxR + dyR * dyR;
 
                         if (distSq < CONFLICT_WARN_DIST_SQ) {
-                            // 写入冲突弧线缓冲区
                             conflictPairsBuffer[pairCount * 6 + 0] = ax;
                             conflictPairsBuffer[pairCount * 6 + 1] = ay;
                             conflictPairsBuffer[pairCount * 6 + 2] = az;
@@ -435,7 +455,6 @@ export function useUAVAnimation(
                             conflictPairsBuffer[pairCount * 6 + 5] = bz;
                             pairCount++;
 
-                            // 只有达到危险距离才推送告警通知
                             if (distSq < CONFLICT_DANGER_DIST_SQ) {
                                 const idA = activeUAVTrajectories[ai]?.id || `UAV-${ai}`;
                                 const idB = activeUAVTrajectories[bi]?.id || `UAV-${bi}`;
@@ -445,6 +464,58 @@ export function useUAVAnimation(
                                     `${idA}_${idB}`,
                                     `空域冲突！${idA} 与 ${idB} 水平距离仅 ${Math.round(dist)}m，高度差 ${Math.round(altDiff)}m，存在碰撞风险！`
                                 );
+                            }
+                        }
+                    }
+                }
+                // 【OPT-A4】跨桶邻域检测：与右/下/对角邻桶做交叉检测
+                for (let ni = 1; ni < NEIGHBOR_OFFSETS.length && pairCount < maxPairs; ni++) {
+                    const neighborKey = bucketKey + NEIGHBOR_OFFSETS[ni];
+                    const neighborIndices = _conflictGrid.get(neighborKey);
+                    if (!neighborIndices) continue;
+
+                    for (let a = 0; a < indices.length && pairCount < maxPairs; a++) {
+                        const ai = indices[a];
+                        const ax = uavPositionsBuffer[ai * 3];
+                        const ay = uavPositionsBuffer[ai * 3 + 1];
+                        const az = uavPositionsBuffer[ai * 3 + 2];
+
+                        for (let b = 0; b < neighborIndices.length && pairCount < maxPairs; b++) {
+                            const bi = neighborIndices[b];
+                            const pairKey = ai < bi ? ai * 100000 + bi : bi * 100000 + ai;
+                            if (_conflictChecked.has(pairKey)) continue;
+                            _conflictChecked.add(pairKey);
+
+                            const bz = uavPositionsBuffer[bi * 3 + 2];
+                            const altDiff = Math.abs(az - bz);
+                            if (altDiff > CONFLICT_ALT_THRESHOLD) continue;
+
+                            const bx = uavPositionsBuffer[bi * 3];
+                            const by = uavPositionsBuffer[bi * 3 + 1];
+                            const cosAvg = (_cosLatCache[ai] + _cosLatCache[bi]) * 0.5;
+                            const dxR = (bx - ax) * DEG2RAD * cosAvg * R;
+                            const dyR = (by - ay) * DEG2RAD * R;
+                            const distSq = dxR * dxR + dyR * dyR;
+
+                            if (distSq < CONFLICT_WARN_DIST_SQ) {
+                                conflictPairsBuffer[pairCount * 6 + 0] = ax;
+                                conflictPairsBuffer[pairCount * 6 + 1] = ay;
+                                conflictPairsBuffer[pairCount * 6 + 2] = az;
+                                conflictPairsBuffer[pairCount * 6 + 3] = bx;
+                                conflictPairsBuffer[pairCount * 6 + 4] = by;
+                                conflictPairsBuffer[pairCount * 6 + 5] = bz;
+                                pairCount++;
+
+                                if (distSq < CONFLICT_DANGER_DIST_SQ) {
+                                    const idA = activeUAVTrajectories[ai]?.id || `UAV-${ai}`;
+                                    const idB = activeUAVTrajectories[bi]?.id || `UAV-${bi}`;
+                                    const dist = Math.sqrt(distSq);
+                                    currentPushAlert(
+                                        'conflict',
+                                        `${idA}_${idB}`,
+                                        `空域冲突！${idA} 与 ${idB} 水平距离仅 ${Math.round(dist)}m，高度差 ${Math.round(altDiff)}m，存在碰撞风险！`
+                                    );
+                                }
                             }
                         }
                     }
@@ -481,15 +552,21 @@ export function useUAVAnimation(
                         currentGlobalTime: next,
                         sabPositions,
                         sabOrientations,
-                        sabActiveTrajectoryIndices
+                        sabActiveTrajectoryIndices,
+                        sabSyncBuffer, // 【OPT-A1】传入同步标志 SAB
                     }
                 });
             } else {
                 updateActiveUAVsBuffer(trajectoriesRef.current, next, timeRangeRef.current.max);
             }
 
+            // 【性能优化 OPT-A1】Atomics 栅栏同步：只有在 Worker 写入完成（标志位=1）时才执行图层克隆
+            // 若 Worker 仍在写入，则沿用上一帧数据，避免读取到半新半旧的撕裂状态
+            const workerReady = typeof SharedArrayBuffer !== 'undefined'
+                ? Atomics.load(sabSyncFlag, 0) === 1
+                : true;
             // 【性能优化 P0-1】使用提取的统一图层克隆函数，已自带静态图层复用功能(OPT-3)
-            const updatedLayers = cloneLayers(deck, next);
+            const updatedLayers = workerReady ? cloneLayers(deck, next) : deck.props.layers;
             
             let nextViewState = undefined;
             // 【电影级运镜】硬锁定跟拍逻辑：在 RAF 级别直接架空 React 接管相机坐标

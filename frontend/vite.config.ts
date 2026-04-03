@@ -14,6 +14,12 @@ export default defineConfig(({ mode }) => ({
       threshold: 10240,   // 仅压缩 >10KB 的文件
       ext: '.gz',
     }),
+    // 【性能优化 OPT-D2】Brotli 压缩：比 Gzip 再节省 20-30% 体积，现代浏览器均支持
+    viteCompression({
+      algorithm: 'brotliCompress',
+      threshold: 10240,
+      ext: '.br',
+    }),
   ],
   server: {
     proxy: {
