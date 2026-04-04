@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => ({
     }),
   ],
   server: {
+    port: 8080,
     proxy: {
       // 将 /api/* 代理到后端 Flask 服务
       '/api': {
