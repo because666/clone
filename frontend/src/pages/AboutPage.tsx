@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Brain, Shield, Code2, Database, Map, Cpu,
     Workflow, ChevronRight, Layers, Zap, Server, Lock, Eye,
-    GitBranch, Box, Radio, BarChart3
+    GitBranch, Box, Radio, BarChart3, ArrowDownToLine, Smartphone
 } from 'lucide-react';
 
 export default function AboutPage() {
@@ -188,37 +188,37 @@ export default function AboutPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
                     <ArchCard icon={<Box />} title="前端渲染引擎" items={[
                         'SoA 连续内存 + TypedArray 零 GC',
-                        'SharedArrayBuffer Worker 并行',
-                        'LOD 剪裁 + 50000 节点上限',
+                        'SharedArrayBuffer + Atomics 栅栏无锁同步',
+                        'Web Worker 并行插值 + 视距裁剪',
                         'deck.gl WebGL2 + 3D 建筑柱体',
-                        '时间切片告警 + 空间哈希碰撞',
+                        '空间哈希网格(0.002°) 冲突检测 O(N²)→O(N)',
                     ]} color="#4f46e5" />
                     <ArchCard icon={<GitBranch />} title="A* v4 路径规划" items={[
-                        '0.0005° 网格精度',
-                        '线段碰撞 + 路径平滑',
-                        '违规后端验检测',
-                        '50000 节点扩展上限',
-                        '禁飞区自动绕行',
+                        '0.0005° 网格精度 + 50000 节点上限',
+                        '线段碰撞检测 + 贝塞尔路径平滑',
+                        '禁飞区 Shapely Point-Line 空间拦截',
+                        '路径点空间哈希索引加速探索',
+                        '多进程并行批量规划 (multiprocessing)',
                     ]} color="#0ea5e9" />
                     <ArchCard icon={<Server />} title="后端蓝图架构" items={[
-                        'Flask Blueprint 模块分治',
+                        '7 个 Flask Blueprint 微服务分治',
                         'SQLAlchemy ORM 持久化',
-                        'SSE 实时任务推送',
-                        'Gunicorn 多 Worker 并发',
-                        'Docker 镜像化部署',
+                        'SSE 长连接实时任务推送',
+                        'Gunicorn 单 Worker + 多线程并发',
+                        'Docker 多阶段构建 + 健康检查',
                     ]} color="#22c55e" />
                     <ArchCard icon={<Lock />} title="安全体系" items={[
                         'JWT 三级角色鉴权 (ADMIN/DISPATCHER/VIEWER)',
-                        '操作审计日志全链路追踪',
-                        '禁飞区 Shapely 空间拦截',
-                        'Mock 降级保证离线可用',
-                        'HTTPS + CORS 安全策略',
+                        'AI 预审 Mock 降级保证离线闭环',
+                        'Shapely 禁飞区空间安全拦截',
+                        'CORS 跨域安全策略',
+                        'Token 鉴权覆盖 SSE/REST 双通道',
                     ]} color="#f59e0b" />
                     <ArchCard icon={<Radio />} title="实时通信" items={[
-                        'SSE 单向事件推送',
-                        '1s 轮询间隔任务变更',
-                        '前端 EventSource 自动重连',
-                        'Token 通过 URL 参数传递',
+                        'SSE 长连接单向事件推送',
+                        '1s 心跳间隔状态同步',
+                        '前端 SharedEventSource 单例复用',
+                        'EventSource 断线自动重连',
                     ]} color="#8b5cf6" />
                     <ArchCard icon={<BarChart3 />} title="数据分析" items={[
                         '6 城市跨域对比雷达图',
@@ -227,6 +227,19 @@ export default function AboutPage() {
                         '告警态势饼图',
                         '分时段订单调度趋势',
                     ]} color="#ec4899" />
+                    <ArchCard icon={<ArrowDownToLine />} title="Binary 传输协议" items={[
+                        'struct.pack 自定义紧凑二进制编码',
+                        '前端 ArrayBuffer 零拷贝解码',
+                        'JSON ~4MB → Binary ~1MB (压缩 75%)',
+                        'Float32/Float64 精度分级存储',
+                        'Worker 线程异步 JSON 解析兜底',
+                    ]} color="#06b6d4" />
+                    <ArchCard icon={<Smartphone />} title="移动端适配" items={[
+                        '独立 Mobile API Blueprint',
+                        'QR Code 扫码快速接入',
+                        '轻量化任务看板视图',
+                        '移动端专属数据裁剪',
+                    ]} color="#f43f5e" />
                 </div>
             </SectionContainer>
 
