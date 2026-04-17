@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 import logging
 import requests
@@ -144,7 +144,7 @@ def preflight_check():
             "message": "success (mock)"
         })
 
-    # 调用真实的大模型 API (OpenAI 兼容模式)
+    # 调用通义千问大模型 API（阿里云百炼平台 HTTP 兼容接口）
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"

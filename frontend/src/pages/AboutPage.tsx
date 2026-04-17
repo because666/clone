@@ -96,8 +96,8 @@ export default function AboutPage() {
                     />
                     <AiToolCard
                         icon={<Code2 size={20} />}
-                        name="DeepSeek / Cursor AI"
-                        provider="DeepSeek · AI 代码辅助"
+                        name="DeepSeek"
+                        provider="深度求索 · AI 代码辅助"
                         usage="开发阶段代码辅助与架构优化"
                         detail="辅助完成 A* 路径规划算法 v4 版本迭代、SoA 渲染架构设计、SharedArrayBuffer 并行计算方案等核心代码的开发与调试。所有 AI 生成代码均经过人工审核与深度修改。"
                         gradient="from-emerald-500 to-teal-600"
@@ -158,7 +158,7 @@ export default function AboutPage() {
                             step={4}
                             icon={<Zap size={18} />}
                             title="LLM 推理层"
-                            desc='调用 Qwen-Plus API (OpenAI Compatible Mode)，temperature=0.2 保证输出稳定性，response_format=json_object 强制 JSON 输出'
+                            desc='调用 Qwen-Plus API（阿里云百炼 HTTP 兼容接口），temperature=0.2 保证输出稳定性，response_format=json_object 强制 JSON 输出'
                             color="#f59e0b"
                         />
                         <FlowArrow />

@@ -8,10 +8,10 @@
 
   <!-- 💡 核心技术栈状态徽章 -->
   <p>
-    <img src="https://img.shields.io/badge/前端-React_18-61DAFB?logo=react&logoColor=white" alt="React" />
+    <img src="https://img.shields.io/badge/前端-React_19-61DAFB?logo=react&logoColor=white" alt="React" />
     <img src="https://img.shields.io/badge/语言-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
     <img src="https://img.shields.io/badge/渲染引擎-Deck.gl-FFF?logo=uber" alt="Deck.gl" />
-    <img src="https://img.shields.io/badge/地图底座-Mapbox-000000?logo=mapbox&logoColor=white" alt="Mapbox" />
+    <img src="https://img.shields.io/badge/地图底座-MapLibre_GL-396CB2?logo=maplibre&logoColor=white" alt="MapLibre" />
     <img src="https://img.shields.io/badge/后端调度-Flask-000000?logo=flask&logoColor=white" alt="Flask" />
     <img src="https://img.shields.io/badge/存储-SQLite-003B57?logo=sqlite&logoColor=white" alt="SQLite" />
     <img src="https://img.shields.io/badge/License-MIT-blue" alt="License" />
@@ -45,24 +45,16 @@
 <div align="center">
   <table>
     <tr>
-      <!-- 模块 1：高潮追踪录屏 -->
+      <!-- 模块 1：镜头追踪 -->
       <td align="center">
         <video src="https://github.com/user-attachments/assets/20f0dbe0-786d-4130-bfa8-233cb6e646d7" autoplay loop muted playsinline style="width: 100%;"></video><br/>
         <b>👆 镜头绑定与单机深度追踪</b><br/>
         <sub>锁定高危隐患航班，同步呈现三维历史航线与到点预估时间</sub>
       </td>
-      <!-- 模块 2：AI 面板（等待开发） -->
+      <!-- 模块 2：ROI 沙盘 -->
       <td align="center">
-        <img src="https://via.placeholder.com/600x380/1e293b/0ea5e9?text=[+WIP+]+AI+Dispatch+Module" alt="自然语言指令调度(研发中)" style="width: 100%;"/><br/>
-        <b>👆 🚧 预留：AI 智能体大模型联控台</b><br/>
-        <sub>解析模糊自然语言意图，触发底盘秒级空域避障调度重播</sub>
-      </td>
-    </tr>
-    <tr>
-      <!-- 模块 3：ROI 沙盘 -->
-      <td align="center" colspan="2">
-        <img src="docs/assets/ROI.png" alt="基建 ROI 沙盘 DSS 决策系统" style="width: 80%; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); margin-top: 10px;"/><br/>
-        <br/><b>👆 🗺️ 基建 ROI 沙盘 (DSS 辅助决策引擎)</b><br/>
+        <img src="docs/assets/ROI.png" alt="基建 ROI 沙盘 DSS 决策系统" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"/><br/>
+        <b>👆 🗺️ 基建 ROI 沙盘 (DSS 辅助决策引擎)</b><br/>
         <sub>支持双点 A/B 博弈、财务闭环测算与 3D 雷达激波渲染，赋能城市低空基建选址规划</sub>
       </td>
     </tr>
@@ -71,12 +63,12 @@
 
 ## ✨ 特性与功能
 
-- 🚀 **高密度三维渲染**: 采用 `Deck.gl` 的 Binary 渲染模式与自定义 `TypedArray` 限制内存分配频率，减少 GC 卡顿。配合 LOD 优化限制不可见区域开销，系统可稳定支持 500+ 架并发 UAV 和 10 万+ 轨迹节点的高帧率大屏渲染。
-- 🧠 **三维动态避障与寻路**: 后端算法应用 0.0005° 精度网格进行空间建模和线段碰撞检测，实现规避真实建筑群与多边形禁飞区的三维航线规划，支持动态地形高程匹配与路径点平滑过滤。
-- ⚡️ **全链路流式调度推送**: 建立后端请求鉴权与状态机流转。通过 `Flask` 搭载 Server-Sent Events (SSE) 协议向下游大盘推送状态流，单向高频数据结合前端双层缓冲区（Double Buffering）合并更新，减少频繁的 DOM 重绘开销。
-- 🛡 **环境仿真与异常预警**: 系统集成气温、多种天气及风场等仿真参数联动模型。无人机航线与划定禁飞区产生空间交集，或受气温载重影响导致续航电量不足时，系统会自动计算剩余余量并在界面生成 UI 预警标签。
-- 🔐 **权限隔离与持久化审查**: 采用 `JWT` 角色管控架构区分大盘展示与后台派发权限。核心业务流水、飞行轨迹点与操作者派送指令均实时写入 `SQLite/PostgreSQL` 数据库，保障记录不可篡改以备朔源审查。
-- 📊 **空域数据聚合与分析**: 内置基于 `ECharts` 构建的统计面板组件。聚合运行时间线内的派送状态等结构化数据，展示分时段起降热力分布、空域运力负载趋势与能耗使用统计，作为非实时情况判断的辅助。
+- 🚀 **三维大屏渲染**: 前端用 `Deck.gl` 做 WebGL 渲染，轨迹数据走 `TypedArray` 避免频繁 GC，远处建筑做了 LOD 降级。实测 500+ 架无人机同屏、10 万级轨迹点跑下来帧率基本稳定。
+- 🧠 **A* 三维避障**: 后端把地图按 0.0005° 切成网格，拿 Shapely 做线段-多边形碰撞检测，航线会自动绕开建筑和禁飞区。路径算完之后还做了贝塞尔平滑，飞出来不会有硬拐弯。
+- ⚡️ **SSE 实时推送**: 没有用 WebSocket，而是选了 SSE（Server-Sent Events）做服务端单向推送，实现简单够用。前端拿双缓冲区攒数据，合并后一次性更新图层，减少重绘次数。
+- 🛡 **天气仿真 + 预警**: 可以调节风速、气温、天气类型，这些参数会实际影响无人机的电量消耗模型。航线穿了禁飞区或者电量算下来不够飞，界面上会直接标红告警。
+- 🔐 **JWT 鉴权与审计**: 分了 ADMIN / DISPATCHER / VIEWER 三种角色，不同角色看到的操作面板不一样。所有派单记录和轨迹数据都落库（SQLite / PostgreSQL），方便回溯。
+- 📊 **数据分析看板**: 单独做了一个 `/analytics` 页面，用 `ECharts` 画了六个维度的图表——分时段订单量、城市运力对比雷达图、能耗分布、告警统计这些，算是给运营提供数据参考。
 
 ## 🏗 架构
 
@@ -94,7 +86,7 @@ flowchart TD
     UI[🖥️ 监控视图与 AI 调度台]:::frontend
     Hook[📌 交互防抖与状态机]:::frontend
     Pool[⚡ TypedArray 零分配缓冲]:::frontend
-    Render[🗺️ MapBox + Deck.gl 引擎]:::frontend
+    Render[🗺️ MapLibre GL + Deck.gl 引擎]:::frontend
 
     %% 服务网关层
     API[🔌 Flask 核心业务 API]:::middleware
