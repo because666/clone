@@ -25,9 +25,8 @@ sys.path.insert(0, str(ROOT))
 try:
     from flask import Flask, send_from_directory, jsonify
     from flask_cors import CORS
-    from flask_compress import Compress
 except ImportError:
-    print("缺少依赖，请运行: pip install flask flask-cors flask-compress pyjwt")
+    print("缺少依赖，请运行: pip install flask flask-cors pyjwt")
     sys.exit(1)
 
 from backend.config import Config, FRONTEND_DIST, DATA_DIR
@@ -71,7 +70,6 @@ def create_app() -> Flask:
 
     # 扩展初始化
     CORS(app)
-    Compress(app)
     db.init_app(app)
 
     # 初始化数据库结构及默认管理员

@@ -48,8 +48,8 @@ ENV PYTHONPATH=/app
 ENV PORT=8080
 ENV FLASK_ENV=production
 
-# 生产环境使用 gunicorn 1 worker + 多线程并发，适配小内存服务器
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", "--timeout", "120", "backend.scripts.server:create_app()"]
+# 生产环境使用 gunicorn 2 worker + 8线程，适配4核8G服务器
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "120", "backend.scripts.server:create_app()"]
 
 # 健康检查，配合 /api/health 端点
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
