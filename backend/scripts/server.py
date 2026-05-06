@@ -33,6 +33,7 @@ except ImportError:
 from backend.config import Config, FRONTEND_DIST, DATA_DIR
 from backend.models.user import db, User
 from backend.core.poi_loader import load_city_pois
+from backend.version import get_build_info
 
 # 导入蓝图
 from backend.api.auth import auth_bp
@@ -104,6 +105,7 @@ def create_app() -> Flask:
     @app.route("/api/health")
     def health_check():
         """标准化健康检查，配合 Docker HEALTHCHECK 和监控系统"""
+        build_info = get_build_info()
         try:
             # 数据库连通性探测
             db.session.execute(db.text("SELECT 1"))
@@ -115,7 +117,8 @@ def create_app() -> Flask:
             "code": 0,
             "data": {
                 "status": "healthy" if db_status == "connected" else "degraded",
-                "version": "1.0.0",
+                "version": build_info["app_version"],
+                "build": build_info,
                 "database": db_status,
                 "cached_cities": list(_POI_CACHE.keys()),
                 "uptime_seconds": round(time.time() - _start_time, 1),

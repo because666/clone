@@ -272,24 +272,10 @@ export default function AboutPage() {
                     background: 'white', borderRadius: 20, padding: 32,
                     boxShadow: '0 4px 24px rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.04)',
                 }}>
-                    {/* 院校信息 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 28 }}>
-                        <img src="/CQU.png" alt="重庆大学" style={{ height: 64, objectFit: 'contain', marginBottom: 8 }} />
-                        <p style={{ fontSize: 15, color: '#475569', margin: 0, fontWeight: 700, letterSpacing: 1 }}>大数据与软件学院</p>
-                    </div>
-
-                    <div style={{ height: 1, background: '#e2e8f0', margin: '0 40px 24px' }} />
-
-                    {/* 团队成员 */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 48, marginBottom: 24, flexWrap: 'wrap' }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, margin: '0 0 6px', letterSpacing: 2, textTransform: 'uppercase' }}>指导老师</p>
-                            <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>杨正益</p>
-                        </div>
-                        <div style={{ width: 1, background: '#e2e8f0' }} />
-                        <div style={{ textAlign: 'center' }}>
-                            <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, margin: '0 0 6px', letterSpacing: 2, textTransform: 'uppercase' }}>核心开发组</p>
-                            <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>应飞扬 · 邓博 · 谢丽欣 · 罗楚瑞</p>
+                        <div style={{ textAlign: 'center', maxWidth: 560 }}>
+                            <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, margin: '0 0 6px', letterSpacing: 2, textTransform: 'uppercase' }}>PROJECT TEAM</p>
+                            <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>参赛团队独立设计与开发</p>
                         </div>
                     </div>
 
