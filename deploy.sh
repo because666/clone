@@ -70,6 +70,11 @@ echo -e "${GREEN}代码拉取完成${NC}"
 
 # 步骤 4: 构建镜像
 echo -e "${YELLOW}[4/6] 构建 Docker 镜像...${NC}"
+export APP_VERSION="${APP_VERSION:-1.0.0}"
+export VCS_REF="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+export VCS_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "Build mapping: version=${APP_VERSION}, commit=${VCS_REF}, branch=${VCS_BRANCH}, built=${BUILD_DATE}"
 docker-compose build --no-cache
 echo -e "${GREEN}镜像构建完成${NC}"
 

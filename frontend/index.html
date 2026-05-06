@@ -9,14 +9,23 @@
   <body>
     <div id="root"></div>
     <!-- 网站备案号 -->
-    <div style="position: fixed; bottom: 4px; width: 100%; text-align: center; z-index: 9999; pointer-events: none;">
-      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: rgba(0, 0, 0, 0.25); backdrop-filter: blur(4px); color: #ffffff; padding: 2px 10px; border-radius: 10px; text-decoration: none; font-size: 12px; font-family: sans-serif; pointer-events: auto; letter-spacing: 0.5px;">
-        桂ICP备2026005821号
-      </a>
-      <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=45090202000529" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; margin-left: 8px; background-color: rgba(0, 0, 0, 0.25); backdrop-filter: blur(4px); color: #ffffff; padding: 2px 10px; border-radius: 10px; text-decoration: none; font-size: 12px; font-family: sans-serif; pointer-events: auto; letter-spacing: 0.5px;">
-        <img src="https://www.beian.gov.cn/img/new/gongan.png" alt="" style="width: 16px; height: 16px; margin-right: 4px;" />
-        桂公网安备45090202000529号
-      </a>
+    <div style="position: fixed; bottom: 8px; width: 100%; text-align: center; z-index: 9999; pointer-events: none;">
+      <div style="display: inline-flex; align-items: center; gap: 12px; background-color: rgba(0, 0, 0, 0.25); backdrop-filter: blur(4px); padding: 3px 14px; border-radius: 12px; pointer-events: auto;">
+        <!-- 工信部ICP备案 -->
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer"
+           style="color: rgba(255,255,255,0.85); text-decoration: none; font-size: 12px; font-family: sans-serif; letter-spacing: 0.4px; white-space: nowrap;">
+          桂ICP备2026005821号
+        </a>
+        <!-- 分隔线 -->
+        <span style="color: rgba(255,255,255,0.3); font-size: 12px;">|</span>
+        <!-- 公安网安备案 -->
+        <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=45090202000529"
+           target="_blank" rel="noopener noreferrer"
+           style="display: inline-flex; align-items: center; gap: 4px; color: rgba(255,255,255,0.85); text-decoration: none; font-size: 12px; font-family: sans-serif; letter-spacing: 0.4px; white-space: nowrap;">
+          <img src="/beian-police.png" alt="公安备案" style="width: 14px; height: 14px; vertical-align: middle; display: inline-block;" />
+          桂公网安备45090202000529号
+        </a>
+      </div>
     </div>
     <script>
       // 全局错误捕获（用于诊断 Vercel 部署黑屏问题）

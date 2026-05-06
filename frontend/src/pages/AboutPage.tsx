@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Brain, Shield, Code2, Database, Map, Cpu,
     Workflow, ChevronRight, Layers, Zap, Server, Lock, Eye,
-    GitBranch, Box, Radio, BarChart3
+    GitBranch, Box, Radio, BarChart3, ArrowDownToLine, Smartphone
 } from 'lucide-react';
 
 export default function AboutPage() {
@@ -96,8 +96,8 @@ export default function AboutPage() {
                     />
                     <AiToolCard
                         icon={<Code2 size={20} />}
-                        name="DeepSeek / Cursor AI"
-                        provider="DeepSeek · AI 代码辅助"
+                        name="DeepSeek"
+                        provider="深度求索 · AI 代码辅助"
                         usage="开发阶段代码辅助与架构优化"
                         detail="辅助完成 A* 路径规划算法 v4 版本迭代、SoA 渲染架构设计、SharedArrayBuffer 并行计算方案等核心代码的开发与调试。所有 AI 生成代码均经过人工审核与深度修改。"
                         gradient="from-emerald-500 to-teal-600"
@@ -158,7 +158,7 @@ export default function AboutPage() {
                             step={4}
                             icon={<Zap size={18} />}
                             title="LLM 推理层"
-                            desc='调用 Qwen-Plus API (OpenAI Compatible Mode)，temperature=0.2 保证输出稳定性，response_format=json_object 强制 JSON 输出'
+                            desc='调用 Qwen-Plus API（阿里云百炼 HTTP 兼容接口），temperature=0.2 保证输出稳定性，response_format=json_object 强制 JSON 输出'
                             color="#f59e0b"
                         />
                         <FlowArrow />
@@ -188,37 +188,37 @@ export default function AboutPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
                     <ArchCard icon={<Box />} title="前端渲染引擎" items={[
                         'SoA 连续内存 + TypedArray 零 GC',
-                        'SharedArrayBuffer Worker 并行',
-                        'LOD 剪裁 + 50000 节点上限',
+                        'SharedArrayBuffer + Atomics 栅栏无锁同步',
+                        'Web Worker 并行插值 + 视距裁剪',
                         'deck.gl WebGL2 + 3D 建筑柱体',
-                        '时间切片告警 + 空间哈希碰撞',
+                        '空间哈希网格(0.002°) 冲突检测 O(N²)→O(N)',
                     ]} color="#4f46e5" />
                     <ArchCard icon={<GitBranch />} title="A* v4 路径规划" items={[
-                        '0.0005° 网格精度',
-                        '线段碰撞 + 路径平滑',
-                        '违规后端验检测',
-                        '50000 节点扩展上限',
-                        '禁飞区自动绕行',
+                        '0.0005° 网格精度 + 50000 节点上限',
+                        '线段碰撞检测 + 贝塞尔路径平滑',
+                        '禁飞区 Shapely Point-Line 空间拦截',
+                        '路径点空间哈希索引加速探索',
+                        '多进程并行批量规划 (multiprocessing)',
                     ]} color="#0ea5e9" />
                     <ArchCard icon={<Server />} title="后端蓝图架构" items={[
-                        'Flask Blueprint 模块分治',
+                        '7 个 Flask Blueprint 微服务分治',
                         'SQLAlchemy ORM 持久化',
-                        'SSE 实时任务推送',
-                        'Gunicorn 多 Worker 并发',
-                        'Docker 镜像化部署',
+                        'SSE 长连接实时任务推送',
+                        'Gunicorn 单 Worker + 多线程并发',
+                        'Docker 多阶段构建 + 健康检查',
                     ]} color="#22c55e" />
                     <ArchCard icon={<Lock />} title="安全体系" items={[
                         'JWT 三级角色鉴权 (ADMIN/DISPATCHER/VIEWER)',
-                        '操作审计日志全链路追踪',
-                        '禁飞区 Shapely 空间拦截',
-                        'Mock 降级保证离线可用',
-                        'HTTPS + CORS 安全策略',
+                        'AI 预审 Mock 降级保证离线闭环',
+                        'Shapely 禁飞区空间安全拦截',
+                        'CORS 跨域安全策略',
+                        'Token 鉴权覆盖 SSE/REST 双通道',
                     ]} color="#f59e0b" />
                     <ArchCard icon={<Radio />} title="实时通信" items={[
-                        'SSE 单向事件推送',
-                        '1s 轮询间隔任务变更',
-                        '前端 EventSource 自动重连',
-                        'Token 通过 URL 参数传递',
+                        'SSE 长连接单向事件推送',
+                        '1s 心跳间隔状态同步',
+                        '前端 SharedEventSource 单例复用',
+                        'EventSource 断线自动重连',
                     ]} color="#8b5cf6" />
                     <ArchCard icon={<BarChart3 />} title="数据分析" items={[
                         '6 城市跨域对比雷达图',
@@ -227,6 +227,19 @@ export default function AboutPage() {
                         '告警态势饼图',
                         '分时段订单调度趋势',
                     ]} color="#ec4899" />
+                    <ArchCard icon={<ArrowDownToLine />} title="Binary 传输协议" items={[
+                        'struct.pack 自定义紧凑二进制编码',
+                        '前端 ArrayBuffer 零拷贝解码',
+                        'JSON ~4MB → Binary ~1MB (压缩 75%)',
+                        'Float32/Float64 精度分级存储',
+                        'Worker 线程异步 JSON 解析兜底',
+                    ]} color="#06b6d4" />
+                    <ArchCard icon={<Smartphone />} title="移动端适配" items={[
+                        '独立 Mobile API Blueprint',
+                        'QR Code 扫码快速接入',
+                        '轻量化任务看板视图',
+                        '移动端专属数据裁剪',
+                    ]} color="#f43f5e" />
                 </div>
             </SectionContainer>
 
@@ -259,24 +272,10 @@ export default function AboutPage() {
                     background: 'white', borderRadius: 20, padding: 32,
                     boxShadow: '0 4px 24px rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.04)',
                 }}>
-                    {/* 院校信息 */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 28 }}>
-                        <img src="/CQU.png" alt="重庆大学" style={{ height: 64, objectFit: 'contain', marginBottom: 8 }} />
-                        <p style={{ fontSize: 15, color: '#475569', margin: 0, fontWeight: 700, letterSpacing: 1 }}>大数据与软件学院</p>
-                    </div>
-
-                    <div style={{ height: 1, background: '#e2e8f0', margin: '0 40px 24px' }} />
-
-                    {/* 团队成员 */}
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 48, marginBottom: 24, flexWrap: 'wrap' }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, margin: '0 0 6px', letterSpacing: 2, textTransform: 'uppercase' }}>指导老师</p>
-                            <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>杨正益</p>
-                        </div>
-                        <div style={{ width: 1, background: '#e2e8f0' }} />
-                        <div style={{ textAlign: 'center' }}>
-                            <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, margin: '0 0 6px', letterSpacing: 2, textTransform: 'uppercase' }}>核心开发组</p>
-                            <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>应飞扬 · 邓博 · 谢丽欣 · 罗楚瑞</p>
+                        <div style={{ textAlign: 'center', maxWidth: 560 }}>
+                            <p style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, margin: '0 0 6px', letterSpacing: 2, textTransform: 'uppercase' }}>PROJECT TEAM</p>
+                            <p style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0 }}>参赛团队独立设计与开发</p>
                         </div>
                     </div>
 

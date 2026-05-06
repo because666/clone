@@ -1,37 +1,31 @@
-#!/bin/bash
-# AetherWeave 服务器启动脚本 - 针对 2核2G 服务器优化
+#!/bin/sh
+# AetherWeave production start script.
+# Tunable through environment variables so one image can run on 2C, 4C, or 8C hosts.
 
 set -e
 
-echo "🚀 启动 AetherWeave 服务..."
-echo "💻 服务器配置: 2核2G"
+PORT="${PORT:-8080}"
+WORKERS="${WEB_CONCURRENCY:-2}"
+THREADS="${GUNICORN_THREADS:-4}"
+TIMEOUT="${GUNICORN_TIMEOUT:-120}"
+KEEP_ALIVE="${GUNICORN_KEEP_ALIVE:-5}"
+MAX_REQUESTS="${GUNICORN_MAX_REQUESTS:-1000}"
+MAX_REQUESTS_JITTER="${GUNICORN_MAX_REQUESTS_JITTER:-50}"
 
-PORT=${PORT:-8080}
-echo "📡 服务端口: $PORT"
-
-# 根据 2核2G 配置优化 Gunicorn 参数
-# workers = 2 (充分利用双核)
-# threads = 4 (提高并发)
-# worker-class = gthread (线程模式更适合 I/O 密集型)
-# max-requests = 1000 (定期重启 worker 防止内存泄漏)
-# max-requests-jitter = 50 (随机抖动避免同时重启)
-
-echo "🌐 启动优化后的 Gunicorn 服务..."
-echo "   Workers: 2"
-echo "   Threads: 4"
-echo "   Worker Class: gthread"
+echo "Starting AetherWeave on :${PORT}"
+echo "Gunicorn workers=${WORKERS}, threads=${THREADS}, timeout=${TIMEOUT}s"
+echo "Build app_version=${APP_VERSION:-unknown}, commit=${GIT_COMMIT:-unknown}, branch=${GIT_BRANCH:-unknown}, built=${BUILD_TIME:-unknown}"
 
 exec gunicorn \
-    --workers 2 \
-    --threads 4 \
-    --worker-class gthread \
-    --worker-connections 1000 \
-    --max-requests 1000 \
-    --max-requests-jitter 50 \
-    --timeout 120 \
-    --keep-alive 5 \
-    --bind 0.0.0.0:$PORT \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level info \
-    trajectory_lab.scripts.server:app
+  --bind "0.0.0.0:${PORT}" \
+  --worker-class gthread \
+  --workers "${WORKERS}" \
+  --threads "${THREADS}" \
+  --timeout "${TIMEOUT}" \
+  --keep-alive "${KEEP_ALIVE}" \
+  --max-requests "${MAX_REQUESTS}" \
+  --max-requests-jitter "${MAX_REQUESTS_JITTER}" \
+  --access-logfile - \
+  --error-logfile - \
+  --log-level info \
+  "backend.scripts.server:create_app()"

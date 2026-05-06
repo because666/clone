@@ -35,6 +35,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 COPY data/ ./data/
+COPY start-server.sh ./start-server.sh
+RUN chmod +x ./start-server.sh
 
 # 从前端构建阶段复制构建产物
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
@@ -47,9 +49,22 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 ENV PORT=8080
 ENV FLASK_ENV=production
+ARG APP_VERSION=1.0.0
+ARG VCS_REF=unknown
+ARG VCS_BRANCH=unknown
+ARG BUILD_DATE=unknown
+ENV APP_VERSION=${APP_VERSION}
+ENV GIT_COMMIT=${VCS_REF}
+ENV GIT_BRANCH=${VCS_BRANCH}
+ENV BUILD_TIME=${BUILD_DATE}
+ENV RELEASE_CHANNEL=production
+LABEL org.opencontainers.image.title="AetherWeave"
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+LABEL org.opencontainers.image.revision="${VCS_REF}"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
 
-# 生产环境使用 gunicorn 2 worker + 8线程，适配4核8G服务器
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "120", "backend.scripts.server:create_app()"]
+# 生产环境使用 gunicorn gthread，并发参数由运行环境控制
+CMD ["./start-server.sh"]
 
 # 健康检查，配合 /api/health 端点
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
